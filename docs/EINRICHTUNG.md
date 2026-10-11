@@ -17,6 +17,7 @@ GitHub → Repository → **Settings → Secrets and variables → Actions → N
 |---|---|
 | `FINVIZ_TOKEN` | dein Finviz-Token |
 | `TWELVEDATA_API_KEY` | dein Twelve-Data-Key |
+| `DATA_PASSPHRASE` | **Pflicht.** Dein Daten-Passwort, nur du kennst es. Mindestens 16 Zeichen, am besten vier zufällige Wörter, z. B. `kiste-wolke-fahrrad-tinte`. Ohne dieses Secret wird nichts veröffentlicht. |
 | `NTFY_TOPIC` | ein langer, geheimer Name, z. B. `aktien-k7x29qpf84m` (in der ntfy-App abonnieren) |
 | `NOTIFY_EMAIL` | optional: deine E-Mail für zusätzliche Hinweise |
 
@@ -39,7 +40,15 @@ App → Einstellungen → *Sicherung herunterladen* → Datei als `config/portfo
 ## 6. Filterwerte ändern
 App → Einstellungen → *Screener- und Signalwerte* → *settings.json erzeugen* → als `config/settings.json` ins Repository legen.
 
+## Wer kann die Seite benutzen?
+Nur du. Die Seite selbst ist öffentlich erreichbar, aber **alle Daten (Aktien, Kurse, Charts, Signale) werden vor dem Veröffentlichen mit deinem Daten-Passwort verschlüsselt (AES-256)**. Wer den Link kennt, sieht nur ein Passwortfeld und unlesbare Dateien. Entschlüsselt wird erst auf deinem Gerät, nachdem du das Passwort eingegeben hast.
+- Beim ersten Öffnen auf dem Handy und auf dem Computer das Daten-Passwort eingeben („Auf diesem Gerät merken“ spart es künftig). Abmelden: Einstellungen → Daten-Passwort.
+- Passwort vergessen oder ändern: neues Secret `DATA_PASSPHRASE` eintragen, Workflow starten, überall neu eingeben.
+- Ein Sicherheitsnetz im Workflow bricht ab, falls je lesbare Daten veröffentlicht würden.
+- Der Code der Seite ist öffentlich, er enthält aber keine Daten und keine Schlüssel.
+
 ## Wichtig
-- Die veröffentlichte Webseite ist für jeden mit dem Link lesbar (bei GitHub Pages auch bei privatem Repository, außer mit Enterprise-Plan). Sie enthält die Screener-Ergebnisse. Prüfe, ob die Nutzungsbedingungen von Finviz das Veröffentlichen erlauben. Wer das nicht möchte, startet die App nur lokal (`npm start`).
-- **Deine Portfolio-Daten stehen nie auf der Webseite.** Sie bleiben im Browser des Geräts. Der PIN-Schutz sperrt die App am Gerät, schützt aber nicht die öffentlichen Marktdaten.
+- **Repository privat lassen** (Settings → General → Danger Zone → Change visibility). Besonders, wenn du `config/portfolio.json` hochlädst: Darin stehen deine Positionen im Klartext.
+- Das Passwort schützt die Daten vor Fremden. Wer dein Passwort kennt oder dein entsperrtes Gerät hat, kann sie lesen. Zusätzlich gibt es den PIN-Schutz in der App.
+- Deine Portfolio-Daten stehen nie auf der Webseite. Sie bleiben im Browser des Geräts.
 - Updates laufen einmal pro Abend. Der „Sofort“-Hinweis bei „Verkaufen prüfen“ kommt direkt nach diesem Lauf, nicht während des Börsentags.

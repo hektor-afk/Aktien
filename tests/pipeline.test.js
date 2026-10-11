@@ -65,3 +65,34 @@ test('Wechselkurs: Antwort lesen, Fehler melden', async () => {
   await assert.rejects(fetchUsdEur({ fetchImpl: async () => ({ ok: false, status: 503 }) }), /503/);
   await assert.rejects(fetchUsdEur({ fetchImpl: async () => ({ ok: true, json: async () => ({}) }) }), /unbrauchbar/);
 });
+
+import { encryptText, decryptText, BAD_PASSWORD } from '../web/core/crypto.js';
+import { encryptDir } from '../src/pipeline/encrypt.js';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+test('Verschlüsselung: Rundlauf, falsches Passwort, Manipulation', async () => {
+  const text = JSON.stringify({ stocks: [{ ticker: 'LUMR', price: 139.01 }], umlaut: 'äöü€' });
+  const env = await encryptText(text, 'ein-langes-passwort', { iterations: 1000 });
+  assert.doesNotMatch(env, /LUMR/);                       // im Klartext nicht lesbar
+  assert.equal(await decryptText(env, 'ein-langes-passwort'), text);
+  await assert.rejects(decryptText(env, 'falsch'), (e) => e.code === BAD_PASSWORD);
+  const o = JSON.parse(env); o.ct = o.ct.slice(0, -4) + 'AAAA';
+  await assert.rejects(decryptText(JSON.stringify(o), 'ein-langes-passwort'), (e) => e.code === BAD_PASSWORD);
+  assert.notEqual(env, await encryptText(text, 'ein-langes-passwort', { iterations: 1000 })); // zufälliger IV
+  await assert.rejects(decryptText('kein json', 'x'), /beschädigt/);
+});
+
+test('Ordner verschlüsseln: Klartext verschwindet, Inhalt bleibt entschlüsselbar', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'akt-'));
+  mkdirSync(join(dir, 'bars'));
+  writeFileSync(join(dir, 'latest.json'), '{"stocks":[{"ticker":"A"}]}');
+  writeFileSync(join(dir, 'bars', 'A.json'), '[["2026-01-02",1,2,0.5,1.5,100]]');
+  assert.equal(await encryptDir(dir, 'pw', 1000), 2);
+  assert.equal(existsSync(join(dir, 'latest.json')), false);
+  assert.deepEqual(readdirSync(join(dir, 'bars')), ['A.enc']);
+  assert.equal(await decryptText(readFileSync(join(dir, 'latest.enc'), 'utf8'), 'pw'), '{"stocks":[{"ticker":"A"}]}');
+  assert.equal(await decryptText(readFileSync(join(dir, 'bars', 'A.enc'), 'utf8'), 'pw'), '[["2026-01-02",1,2,0.5,1.5,100]]');
+  await assert.rejects(encryptDir(dir, ''), /Kein Passwort/);
+});

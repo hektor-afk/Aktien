@@ -3,6 +3,8 @@ import { GLOSSARY } from './glossary.js';
 import { skeleton } from './components.js';
 import { heute, treffer, bindTreffer, detail } from './pages.js';
 import { initLock } from './lock.js';
+import { loadData, setPassword, NEED_PASSWORD } from './data.js';
+import { BAD_PASSWORD } from '../core/crypto.js';
 import { branchen, auswertung, kalender, einstellungen } from './pages-more.js';
 import { rechner, watchlist, portfolio, kauf, computeAlerts } from './pages-trade.js';
 import { dateTimeDe } from '../core/format.js';
@@ -92,15 +94,53 @@ async function route() {
   view.focus({ preventScroll: true });
 }
 
+/** Passwortfeld für die verschlüsselten Daten. Wartet, bis ein Passwort eingegeben wurde. */
+function askPassword(wrong) {
+  return new Promise((resolve) => {
+    let el = document.getElementById('gate');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'gate'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+      el.innerHTML = html`<form class="lock-box" autocomplete="off">
+        <div class="brand-mark" style="width:44px;height:44px;border-radius:14px;margin:0 auto 16px"></div>
+        <h2>Daten entsperren</h2>
+        <p class="muted" id="gateMsg">Die Daten sind verschlüsselt. Gib dein Daten-Passwort ein.</p>
+        <input id="gatePw" type="password" autocomplete="current-password" placeholder="Daten-Passwort" aria-label="Daten-Passwort" style="text-align:center;margin-bottom:12px">
+        <label class="toggle" style="justify-content:center;font-size:14px;margin-bottom:14px"><input type="checkbox" id="gateRemember" checked style="width:20px;height:20px"> Auf diesem Gerät merken</label>
+        <button class="btn primary" type="submit" style="width:100%">Entsperren</button></form>`.s;
+      document.body.append(el);
+    }
+    const msg = el.querySelector('#gateMsg');
+    if (wrong) { msg.textContent = 'Falsches Passwort. Bitte erneut versuchen.'; msg.classList.add('bad'); el.querySelector('#gatePw').value = ''; }
+    el.querySelector('#gatePw').focus();
+    el.querySelector('form').onsubmit = (e) => {
+      e.preventDefault();
+      const pw = el.querySelector('#gatePw').value;
+      if (!pw) return;
+      setPassword(pw, el.querySelector('#gateRemember').checked);
+      resolve();
+    };
+  });
+}
+
+async function loadLatest() {
+  let wrong = false;
+  for (;;) {
+    try { const d = await loadData('latest'); document.getElementById('gate')?.remove(); return d; }
+    catch (e) {
+      if (e.code === NEED_PASSWORD || e.code === BAD_PASSWORD) { await askPassword(e.code === BAD_PASSWORD || wrong); wrong = true; continue; }
+      throw e;
+    }
+  }
+}
+
 async function init() {
   drawNav(currentKey());
   view.innerHTML = skeleton().s;
   try {
-    const r = await fetch('data/latest.json', { cache: 'no-cache' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    data = await r.json();
+    data = await loadLatest();
   } catch (e) {
-    data = { meta: { status: 'fehler', generatedAt: null, messages: [{ level: 'error', text: `Die Datei data/latest.json konnte nicht geladen werden (${e.message}). Wurde das Update-Skript schon einmal ausgeführt?` }], sources: {} }, market: null, stocks: [], settings: null };
+    data = { meta: { status: 'fehler', generatedAt: null, messages: [{ level: 'error', text: `Die Daten konnten nicht geladen werden (${e.message}). Wurde das Update schon einmal ausgeführt?` }], sources: {} }, market: null, stocks: [], tracked: [], settings: null };
   }
   banners();
   await route();

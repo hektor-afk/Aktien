@@ -15,6 +15,8 @@ import { marketStatus } from '../../web/core/market.js';
 import { compareStocks } from '../../web/core/rank.js';
 import { fetchUsdEur } from './fx.js';
 import { buildNotifications, sendNotifications } from './notify.js';
+import { encryptDir, readSnapshotFile } from './encrypt.js';
+import { decryptText } from '../../web/core/crypto.js';
 import { expectedTradingDate, berlinParts, lastWeekdayOnOrBefore } from '../../web/core/dates.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -37,11 +39,16 @@ function loadPositions() {
 }
 
 async function loadPrevious(outDir) {
-  const site = process.env.SITE_URL;
+  const site = process.env.SITE_URL?.replace(/\/$/, '');
+  const pass = process.env.DATA_PASSPHRASE;
   try {
-    if (site) { const r = await fetch(`${site.replace(/\/$/, '')}/data/latest.json`); if (r.ok) return await r.json(); }
-    const f = join(outDir, 'latest.json');
-    return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+    if (site) {
+      const e = await fetch(`${site}/data/latest.enc`);
+      if (e.ok && pass) return JSON.parse(await decryptText(await e.text(), pass));
+      const r = await fetch(`${site}/data/latest.json`);
+      if (r.ok) return await r.json();
+    }
+    return await readSnapshotFile(outDir, pass, decryptText);
   } catch { return null; }
 }
 
@@ -160,6 +167,21 @@ async function main() {
     process.exitCode = 1;
   }
   writeFileSync(join(outDir, 'latest.json'), JSON.stringify(snapshot));
+  const pass = process.env.DATA_PASSPHRASE;
+  if (pass) {
+    rmSync(join(outDir, 'latest.enc'), { force: true });
+    const n = await encryptDir(outDir, pass);
+    log(`Verschlüsselt: ${n} Dateien (nur mit deinem Daten-Passwort lesbar).`);
+  } else if (!demo && process.env.CI) {
+    // Öffentliche Veröffentlichung ohne Passwort würde fremden Leuten deine Daten zeigen -> stattdessen nur eine Meldung.
+    rmSync(join(outDir, 'bars'), { recursive: true, force: true });
+    writeFileSync(join(outDir, 'latest.json'), JSON.stringify({
+      meta: { generatedAt: new Date().toISOString(), asOf: null, demo: false, status: 'fehler', sources: {}, funnel: null,
+        messages: [{ level: 'error', text: 'Das Secret DATA_PASSPHRASE fehlt. Aus Datenschutzgründen werden ohne Passwort keine Daten veröffentlicht.' }] },
+      market: null, fx: null, settings: null, stocks: [], tracked: [] }));
+    process.exitCode = 1;
+    log('FEHLER: DATA_PASSPHRASE fehlt – es werden keine Daten veröffentlicht.');
+  }
   log(`Gespeichert: ${snapshot.stocks.length} Aktien, Status "${snapshot.meta.status}".`);
 
   if (!demo) {

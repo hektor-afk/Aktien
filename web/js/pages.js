@@ -5,6 +5,7 @@ import { num, usd, percent, dateDe, dateTimeDe, compact } from '../core/format.j
 import { positionSize } from '../core/position.js';
 import { getRisk, setRisk, watch } from './db.js';
 import { moneyHtml } from './fx.js';
+import { loadData } from './data.js';
 import { computeAlerts } from './pages-trade.js';
 
 const isWeak = (d) => d.market?.status === 'red';
@@ -134,9 +135,7 @@ export async function detail(d, ticker) {
   let bars = [];
   let barsError = false;
   try {
-    const r = await fetch(`data/bars/${encodeURIComponent(ticker)}.json`, { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    bars = (await r.json()).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }));
+    bars = (await loadData(`bars/${encodeURIComponent(ticker)}`)).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }));
   } catch { barsError = true; }
 
   const sg = s.signal;

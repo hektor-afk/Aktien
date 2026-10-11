@@ -11,6 +11,7 @@ import { makeBackup, parseBackup } from '../core/backup.js';
 import { num, percent, dateDe, dateTimeDe } from '../core/format.js';
 import { isoDate } from '../core/dates.js';
 import { filt } from './pages.js';
+import { forgetPassword, storedPassword } from './data.js';
 
 const val = (root, sel) => parseFloat(String(root.querySelector(sel)?.value ?? '').replace(',', '.'));
 const sign = (x) => (x >= 0 ? 'up' : 'down');
@@ -168,6 +169,8 @@ export function einstellungen(d) {
         ${chk('n_newSignals', 'Neue Kaufsignale (ein Hinweis pro Abend)', true)}${chk('n_sellAlerts', 'Verkaufen prüfen (sofort)', true)}${chk('n_errors', 'Fehler beim Datenabruf', true)}
         <div class="row-actions" style="margin:0"><button id="genJson" class="btn primary" type="button">settings.json erzeugen</button><button id="notifyHelp" class="btn" type="button">Push einrichten</button></div></section>
 
+      ${storedPassword() ? html`<section class="card"><h3>Daten-Passwort</h3><p class="muted" style="margin:0 0 10px;font-size:14px">Die veröffentlichten Daten sind verschlüsselt. Dieses Gerät merkt sich dein Passwort. Mit „Abmelden“ musst du es beim nächsten Öffnen neu eingeben.</p><button id="dataLogout" class="btn" type="button">Abmelden</button></section>` : ''}
+
       <section class="card"><h3>Datenstatus</h3>
         <dl class="kv"><dt>Zuletzt aktualisiert</dt><dd style="font-size:15px">${dateTimeDe(m.generatedAt)}</dd>
           <dt>Handelstag der Kurse</dt><dd style="font-size:15px">${dateDe(m.asOf)}</dd>
@@ -199,6 +202,8 @@ export function einstellungen(d) {
       }));
       root.querySelector('#pinRemove')?.addEventListener('click', () => pinSheet('PIN entfernen', [['p0', 'Aktuelle PIN']], (sh) => { if (!verifyPin(sh.querySelector('#p0').value)) throw new Error('Die PIN stimmt nicht.'); removePin(); }));
       root.querySelector('#pinLock')?.addEventListener('click', lockNow);
+
+      root.querySelector('#dataLogout')?.addEventListener('click', () => { forgetPassword(); location.reload(); });
 
       // Datensicherung
       root.querySelector('#bkExport').addEventListener('click', () => {

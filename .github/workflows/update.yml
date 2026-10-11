@@ -37,6 +37,7 @@ jobs:
         continue-on-error: true      # Bei einem Fehler wird trotzdem eine klare Fehlermeldung veröffentlicht
         run: npm run update
         env:
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
           FINVIZ_TOKEN: ${{ secrets.FINVIZ_TOKEN }}
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
@@ -45,6 +46,9 @@ jobs:
 
       - id: result
         run: echo "ok=${{ steps.update.outcome == 'success' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sicherheitsprüfung (nichts Lesbares veröffentlichen)
+        run: node scripts/verify-encrypted.js
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

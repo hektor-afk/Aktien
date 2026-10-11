@@ -1,6 +1,6 @@
 // Offline-Hülle: App-Dateien aus dem Cache, Daten immer frisch (nur bei fehlendem Netz aus dem Cache).
-const VERSION = 'v3';
-const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/pages.js', 'js/components.js', 'js/ui.js', 'js/chart.js', 'js/glossary.js', 'js/db.js', 'js/fx.js', 'js/lock.js', 'js/pages-more.js', 'core/stats.js', 'core/industries.js', 'core/calendar.js', 'core/backup.js', 'core/sha256.js', 'js/pages-trade.js', 'core/portfolio.js',
+const VERSION = 'v4';
+const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/pages.js', 'js/components.js', 'js/ui.js', 'js/chart.js', 'js/glossary.js', 'js/db.js', 'js/data.js', 'core/crypto.js', 'js/fx.js', 'js/lock.js', 'js/pages-more.js', 'core/stats.js', 'core/industries.js', 'core/calendar.js', 'core/backup.js', 'core/sha256.js', 'js/pages-trade.js', 'core/portfolio.js',
   'core/indicators.js', 'core/signal.js', 'core/format.js', 'core/dates.js', 'core/position.js', 'core/relstrength.js', 'core/quality.js', 'core/market.js', 'core/rank.js',
   'vendor/lightweight-charts.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 

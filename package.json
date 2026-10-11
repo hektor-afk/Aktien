@@ -1,0 +1,15 @@
+{
+  "name": "aktien-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Abend-Screener für US-Aktien (Long) mit Kaufsignal-Ampel",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "demo": "node src/pipeline/run.js --demo",
+    "update": "node src/pipeline/run.js",
+    "start": "node scripts/serve.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "lightweight-charts": "5.2.1" }
+}

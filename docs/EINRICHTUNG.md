@@ -20,11 +20,11 @@ GitHub → Repository → **Settings → Secrets and variables → Actions → N
 | `NTFY_TOPIC` | ein langer, geheimer Name, z. B. `aktien-k7x29qpf84m` (in der ntfy-App abonnieren) |
 | `NOTIFY_EMAIL` | optional: deine E-Mail für zusätzliche Hinweise |
 
-## 3. Auf `main` bringen und Webseite einschalten
-1. Den Branch `claude/stock-screening-app-de-jbr8np` per Pull Request nach `main` übernehmen (Workflows laufen nur vom Hauptzweig).
-2. **Settings → Pages → Source: GitHub Actions**.
-3. **Actions → „Täglich aktualisieren und veröffentlichen“ → Run workflow** für das erste Update.
-4. Nach ca. 2 Minuten ist die App unter `https://<dein-name>.github.io/<repo-name>/` erreichbar.
+## 3. Webseite einschalten
+Der Standard-Branch dieses Repos ist `claude/stock-screening-app-de-jbr8np`, ein Pull Request ist nicht nötig.
+1. **Settings → Pages → Source: GitHub Actions**.
+2. **Actions → „Täglich aktualisieren und veröffentlichen“ → Run workflow** für das erste Update.
+3. Nach ca. 2 Minuten ist die App unter `https://<dein-name>.github.io/Aktien/` erreichbar.
 
 Ab dann: Mo–Fr um 22:00 UTC (23:00 Uhr Winter / 00:00 Uhr Sommer) automatisch. Schlägt der Abruf fehl, zeigt die App eine rote Meldung statt alter Zahlen, du bekommst eine Push-Nachricht und GitHub markiert den Lauf rot.
 

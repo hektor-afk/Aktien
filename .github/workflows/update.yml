@@ -7,7 +7,7 @@ on:
     - cron: '0 22 * * 1-5'
   workflow_dispatch:        # Knopf "Run workflow" für ein Update auf Abruf
   push:
-    branches: [main]
+    branches: [main, claude/stock-screening-app-de-jbr8np]   # Standard-Branch dieses Repos
 
 permissions:
   contents: read

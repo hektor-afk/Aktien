@@ -5,7 +5,7 @@ Dauer: ca. 20 Minuten, einmalig. Danach läuft alles von selbst.
 ## 1. Konten und Schlüssel
 | Was | Kosten | Wofür |
 |---|---|---|
-| **Finviz Elite** (finviz.com) | ca. 25–40 $/Monat, Preis auf finviz.com prüfen | Screener-Export. Den API-Token findest du im Finviz-Konto (Export-Link enthält `auth=...`). |
+| **TradingView-Scanner** | kostenlos, kein Konto, kein Schlüssel | Screener: Aktienliste, Marktkapitalisierung, Wachstum, Quartalstermine, Branchen. Inoffizielle Schnittstelle, kann sich ändern. |
 | **Twelve Data** (twelvedata.com) | kostenlos (Basic) | Kursdaten für Charts und Berechnung. API-Key im Dashboard. |
 | **ntfy** (App im App Store / Play Store) | kostenlos | Push-Nachrichten aufs Handy. |
 | **GitHub** | kostenlos | Hosting + nächtliche Automatik (hast du schon). |
@@ -15,7 +15,6 @@ GitHub → Repository → **Settings → Secrets and variables → Actions → N
 
 | Name | Wert |
 |---|---|
-| `FINVIZ_TOKEN` | dein Finviz-Token |
 | `TWELVEDATA_API_KEY` | dein Twelve-Data-Key |
 | `DATA_PASSPHRASE` | **Pflicht.** Dein Daten-Passwort, nur du kennst es. Mindestens 16 Zeichen, am besten vier zufällige Wörter, z. B. `kiste-wolke-fahrrad-tinte`. Ohne dieses Secret wird nichts veröffentlicht. |
 | `NTFY_TOPIC` | ein langer, geheimer Name, z. B. `aktien-k7x29qpf84m` (in der ntfy-App abonnieren) |
@@ -50,7 +49,7 @@ Der Server rechnet nachts den Screener. **Für deine Watchlist und deine offenen
 Wichtig:
 - Kostenlos sind 8 Abrufe pro Minute und 800 pro Tag. Die App bremst sich selbst und stoppt bei 750. Pro Aktie und Aktualisierung zählt 1 Abruf, plus 1 für den S&P-500-Vergleich.
 - Während des Handelstags zeigt die Karte „Live … · Tag läuft“. Kaufsignale werden nur aus **abgeschlossenen** Handelstagen berechnet, ebenso „Verkaufen prüfen“. Der Live-Kurs zeigt Gewinn und Verlust.
-- Quartalstermin fehlt (Twelve Data liefert ihn nicht kostenlos)? Auf der Watchlist „Bericht-Termin …“ antippen und das Datum eintragen. Der Server holt ihn für Aktien aus `config/portfolio.json` zusätzlich von Finviz.
+- Quartalstermin fehlt (Twelve Data liefert ihn nicht kostenlos, TradingView nur für Aktien im Nacht-Lauf)? Auf der Watchlist „Bericht-Termin …“ antippen und das Datum eintragen. Der Server holt ihn für Aktien aus `config/portfolio.json` zusätzlich vom TradingView-Scanner.
 - Ob die kostenlose Stufe von Twelve Data Echtzeit- oder verzögerte Kurse liefert, bitte auf twelvedata.com prüfen.
 
 ## Wer kann die Seite benutzen?

@@ -38,7 +38,6 @@ jobs:
         run: npm run update
         env:
           DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
-          FINVIZ_TOKEN: ${{ secrets.FINVIZ_TOKEN }}
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}

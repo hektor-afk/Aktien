@@ -12,7 +12,7 @@ Abend-Screener für US-Einzelaktien (nur Long). Deutsch, Handy zuerst. Keine Anl
 Siehe **docs/EINRICHTUNG.md** (Schlüssel, GitHub Pages, Push aufs Handy).
 
 ## Echte Daten
-`.env.example` nach `.env` kopieren und eintragen: `FINVIZ_TOKEN` (Finviz Elite) und `TWELVEDATA_API_KEY` (kostenlos).
+`.env.example` nach `.env` kopieren und `TWELVEDATA_API_KEY` (kostenlos) eintragen. Der Screener kommt kostenlos vom TradingView-Scanner, dafür ist kein Schlüssel nötig.
 Dann `npm run update`, danach `npm start`.
 
 ## Einstellungen

@@ -219,7 +219,7 @@ test('Ranking: Signal vor Fast vor Noch nicht, dann relative Stärke', () => {
   ]);
 });
 
-test('Datum: Differenzen, Finviz-Termine, erwarteter Handelstag', () => {
+test('Datum: Differenzen, Termin-Texte, erwarteter Handelstag', () => {
   assert.equal(daysBetween('2026-09-17', '2026-10-01'), 14);
   assert.deepEqual(parseEarningsDate('10/23/2026 AMC'), { date: '2026-10-23', time: 'AMC' });
   assert.deepEqual(parseEarningsDate('Oct 23 BMO', '2026-09-17'), { date: '2026-10-23', time: 'BMO' });

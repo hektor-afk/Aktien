@@ -1,11 +1,12 @@
 // Nacht-Skript: holt Daten, wendet die Kriterien an und speichert das Ergebnis in web/data/.
 //   npm run demo      -> mit erfundenen Demo-Daten (kein Konto nötig)
-//   npm run update    -> echte Daten (Finviz + Twelve Data, Schlüssel in .env)
+//   npm run update    -> echte Daten (TradingView-Scanner + Twelve Data, Schlüssel in .env)
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULTS, mergeSettings } from '../../config/defaults.js';
-import { fetchScreener, applyScreener, fetchTickerRows } from './finviz.js';
+import { fetchScreener, fetchTickerRows } from './tradingview.js';
+import { applyScreener } from './screener.js';
 import { twelveDataProvider } from './prices.js';
 import { demoUniverse, genMarket } from './demo.js';
 import { analyseStock } from '../../web/core/analyse.js';
@@ -57,6 +58,7 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
   const today = berlinParts(now).date;
   const expected = demo ? lastWeekdayOnOrBefore(today) : expectedTradingDate(now);
   let rows, benchBars, provider, barsOf;
+  let skipCriteria = [];
 
   if (demo) {
     const uni = demoUniverse({ endDate: expected });
@@ -65,13 +67,16 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
     barsOf = async (t) => uni.bars[t];
     messages.push({ level: 'info', text: 'DEMO-MODUS: Alle Aktien und Kurse sind erfunden. Nur zum Ausprobieren.' });
   } else {
-    rows = await fetchScreener({ token: process.env.FINVIZ_TOKEN, today });
+    const scan = await fetchScreener({ settings });
+    rows = scan.rows;
+    skipCriteria = scan.unavailable;
+    if (skipCriteria.length) messages.push({ level: 'warn', text: `TradingView liefert für ${skipCriteria.map((k) => ({ epsQoq: 'EPS-Wachstum', salesQoq: 'Umsatzwachstum' })[k] ?? k).join(' und ')} keine Daten. Dieses Kriterium wird nicht geprüft.` });
     provider = twelveDataProvider({ apiKey: process.env.TWELVEDATA_API_KEY, log });
     benchBars = await provider.fetchBars(settings.market.benchmark);
     barsOf = (t) => provider.fetchBars(t);
   }
 
-  const hits = applyScreener(rows, settings.screener);
+  const hits = applyScreener(rows, settings.screener, { skip: skipCriteria });
   const candidates = hits.slice(0, settings.screener.maxCandidates);
   log(`${rows.length} Aktien geladen, ${hits.length} erfüllen den Screener, ${candidates.length} werden geprüft.`);
   if (hits.length > candidates.length) {
@@ -112,7 +117,7 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
   const known = new Set(rows.map((r) => r.ticker));
   const missingMeta = wanted.filter((t) => !known.has(t));
   if (!demo && missingMeta.length) {
-    try { rows.push(...await fetchTickerRows({ token: process.env.FINVIZ_TOKEN, tickers: missingMeta, today })); }
+    try { rows.push(...(await fetchTickerRows({ settings, tickers: missingMeta })).rows); }
     catch (e) { messages.push({ level: 'warn', text: `Firmendaten für ${missingMeta.join(', ')} konnten nicht geladen werden (${e.message}).` }); }
   }
   for (const t of wanted) {
@@ -136,7 +141,7 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
     meta: {
       generatedAt: now.toISOString(), asOf, demo,
       status: failed.length ? 'teilweise' : 'ok', messages,
-      sources: { screener: demo ? 'Demo-Daten' : 'Finviz Elite', prices: demo ? 'Demo-Daten' : provider.name, benchmark: `${settings.market.benchmark} (ETF auf den S&P 500)` },
+      sources: { screener: demo ? 'Demo-Daten' : 'TradingView (Scanner)', prices: demo ? 'Demo-Daten' : provider.name, benchmark: `${settings.market.benchmark} (ETF auf den S&P 500)` },
       funnel: { loaded: rows.length, passed: hits.length, analysed: stocks.length }
     },
     market, fx,

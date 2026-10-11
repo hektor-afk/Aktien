@@ -54,7 +54,7 @@ export function weekdaysBetween(a, b) {
   return n;
 }
 
-/** Finviz-Datum ("10/23/2026 AMC", "Oct 23 AMC", ISO) -> {date, time} oder null. */
+/** Datum als Text ("10/23/2026 AMC", "Oct 23 AMC", ISO) -> {date, time} oder null. */
 export function parseEarningsDate(text, today = isoDate(new Date())) {
   if (!text) return null;
   const t = String(text).trim();

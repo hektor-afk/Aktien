@@ -2,7 +2,7 @@
 // (nur die Felder eintragen, die du ändern willst) – später auch über die App.
 export const DEFAULTS = {
   // 1) Screener – exakt so, wie in der Aufgabe beschrieben. Geprüft wird lokal,
-  //    dadurch ist jeder Wert frei änderbar (Finviz liefert nur die Rohdaten).
+  //    dadurch ist jeder Wert frei änderbar (die Datenquelle liefert nur die Rohdaten).
   screener: {
     minMarketCapMrd: 2,        // Marktkapitalisierung > 2 Mrd. $
     minPrice: 10,              // Kurs > 10 $
@@ -51,7 +51,7 @@ export const DEFAULTS = {
     minBars: 210,
     jumpPct: 30,               // Tagessprung über 30 % = auffällig
     maxGapDays: 4,             // mehr als 4 Kalendertage ohne Kurs = fehlende Tage
-    maxPriceDeviationPct: 3    // Finviz-Kurs vs. Schlusskurs der Kurs-API
+    maxPriceDeviationPct: 3    // Kurs der Screener-Quelle vs. Schlusskurs der Kurs-API
   },
 
   // Aktien, die immer mitgeladen werden (Positionen und Watchlist), auch außerhalb des Screeners

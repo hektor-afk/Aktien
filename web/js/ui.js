@@ -39,3 +39,15 @@ export function save(key, value) { try { localStorage.setItem(key, JSON.stringif
 
 /** Info-Symbol: tippen öffnet die Erklärung. */
 export const infoBtn = (term) => html`<button class="info" data-info="${term}" aria-label="Erklärung anzeigen" type="button">i</button>`;
+
+/** Bottom-Sheet öffnen (Info-Texte, Formulare). `onOpen` bekommt das Sheet zum Verdrahten. */
+export function openSheet(content, onOpen) {
+  const sheet = document.querySelector('#sheet');
+  sheet.innerHTML = html`<div class="sheet-body">${content}<button class="close" type="button">Schließen</button></div>`.s;
+  sheet.querySelector('.close').onclick = () => sheet.close();
+  sheet.onclick = (e) => { if (e.target === sheet) sheet.close(); };
+  if (!sheet.open) sheet.showModal();
+  onOpen?.(sheet);
+}
+export const closeSheet = () => document.querySelector('#sheet').open && document.querySelector('#sheet').close();
+export const refresh = () => document.dispatchEvent(new CustomEvent('refresh'));

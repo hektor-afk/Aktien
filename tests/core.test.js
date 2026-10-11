@@ -237,3 +237,86 @@ test('Zahlenformat (deutsch)', () => {
   assert.equal(percent(5.25, 1, true), '+5,3 %');
   assert.equal(dateDe('2026-10-09'), '09.10.2026');
 });
+
+import { positionRisk, portfolioStatus, pnl, closedResult, lossStreak, checkNewTrade, sellCheck, trailSuggestion } from '../web/core/portfolio.js';
+
+const T = (o) => ({ id: o.ticker, status: 'open', stop0: o.stop, ...o });
+const riskCfg = { riskPerTradePct: 1, maxOpenRiskPct: 6, maxPositions: 6, maxPerIndustry: 2 };
+
+test('Portfolio: Risiko offener Positionen (Stop über Einstieg = kein Risiko)', () => {
+  const open = [T({ ticker: 'A', entry: 100, stop: 93, shares: 14, industry: 'X' }), T({ ticker: 'B', entry: 50, stop: 47, shares: 20, industry: 'X' }), T({ ticker: 'C', entry: 20, stop: 21, shares: 100, industry: 'Y' })];
+  assert.equal(positionRisk(open[0]), 98);
+  assert.equal(positionRisk(open[1]), 60);
+  assert.equal(positionRisk(open[2]), 0);
+  const st = portfolioStatus(open, 10_000);
+  assert.equal(st.riskAmount, 158);
+  close(st.riskPct, 1.58);
+  assert.equal(st.byIndustry.X, 2);
+  assert.equal(portfolioStatus([...open, T({ ticker: 'D', entry: 10, stop: 9, shares: 5, industry: 'X' })], 10_000).crowded[0].industry, 'X');
+});
+
+test('Gewinn/Verlust und R-Vielfaches', () => {
+  const t = T({ ticker: 'A', entry: 100, stop: 93, shares: 10 });
+  const p = pnl(t, 112);
+  assert.equal(p.value, 120); close(p.pct, 12); close(p.distToStopPct, (112 - 93) / 112 * 100);
+  const c = closedResult({ ...t, exit: 112 });
+  assert.equal(c.value, 120); close(c.r, 12 / 7);
+  assert.equal(closedResult({ ...t, exit: 90, fees: 2 }).value, -102);
+});
+
+test('Verlustserie zählt nur am Ende', () => {
+  const mk = (exit, day) => ({ entry: 100, stop0: 93, shares: 1, exit, closedAt: `2026-01-0${day}` });
+  assert.equal(lossStreak([mk(110, 1), mk(95, 2), mk(90, 3), mk(99, 4)]), 3);
+  assert.equal(lossStreak([mk(95, 1), mk(90, 2), mk(110, 3)]), 0);
+  assert.equal(lossStreak([]), 0);
+  assert.equal(lossStreak([mk(95, 4), mk(90, 2), mk(110, 1)]), 2); // Sortierung nach Datum
+});
+
+test('Checkliste: grün, Limit-Sperre, Branche, Hinterherlaufen', () => {
+  const stock = { signal: { overall: 'kaufsignal', label: 'Kaufsignal', entryMax: 105 } };
+  const trade = { ticker: 'N', entry: 100, stop: 93, shares: 14, industry: 'Soft' }; // Risiko 98 = 0,98 %
+  const base = { open: [], capital: 10_000, risk: riskCfg, trade, stock, market: { status: 'green' } };
+  const ok = checkNewTrade(base);
+  assert.equal(ok.allGreen, true); assert.equal(ok.locked, false);
+
+  assert.equal(checkNewTrade({ ...base, market: { status: 'red' } }).items.find((i) => i.key === 'markt').status, 'red');
+  assert.equal(checkNewTrade({ ...base, stock: { signal: { overall: 'fast', label: 'Fast (6 von 7)', entryMax: 105 } } }).items[0].status, 'red');
+  assert.equal(checkNewTrade({ ...base, trade: { ...trade, entry: 106 } }).items.find((i) => i.key === 'zone').status, 'red');
+  assert.equal(checkNewTrade({ ...base, trade: { ...trade, shares: 30 } }).items.find((i) => i.key === 'risiko').status, 'red'); // 2,1 %
+  assert.equal(checkNewTrade({ ...base, trade: { ...trade, stop: 90 } }).items.find((i) => i.key === 'risiko').status, 'red');   // 10 % Stop
+
+  // Gesamtrisiko: 5 Positionen mit je 1 % = 5 %, neue 1 % -> 6 % (erlaubt), danach gesperrt
+  const mk = (i) => T({ ticker: 'P' + i, entry: 100, stop: 93, shares: 14, industry: 'I' + i });
+  const five = [1, 2, 3, 4, 5].map(mk);
+  assert.equal(checkNewTrade({ ...base, open: five }).locked, false);
+  const full = checkNewTrade({ ...base, open: [...five, mk(6)] });
+  assert.equal(full.locked, true); assert.match(full.lockReason, /6 von 6 Positionen/);
+  const riskHeavy = checkNewTrade({ ...base, open: [T({ ticker: 'Z', entry: 100, stop: 50, shares: 12, industry: 'Q' })] }); // 6 % schon belegt
+  assert.equal(riskHeavy.locked, true); assert.match(riskHeavy.lockReason, /Gesamtrisiko/);
+
+  const same = [T({ ticker: 'S1', entry: 100, stop: 99, shares: 1, industry: 'Soft' })];
+  assert.equal(checkNewTrade({ ...base, open: same }).items.find((i) => i.key === 'branche').status, 'amber');
+  assert.equal(checkNewTrade({ ...base, open: [...same, T({ ticker: 'S2', entry: 100, stop: 99, shares: 1, industry: 'Soft' })] }).items.find((i) => i.key === 'branche').status, 'red');
+  assert.equal(checkNewTrade({ ...base, streak: 3 }).items.at(-1).key, 'serie');
+  assert.equal(checkNewTrade({ ...base, stock: null }).items[0].status, 'gray');
+});
+
+test('Verkaufsregeln: unter Stop und/oder unter SMA 50', () => {
+  const t = T({ ticker: 'A', entry: 100, stop: 93, shares: 1 });
+  assert.equal(sellCheck(t, { price: 105, sma50: 100 }).sell, false);
+  assert.equal(sellCheck(t, { price: 92, sma50: 90 }).reasons.length, 1);   // nur Stop
+  assert.equal(sellCheck(t, { price: 97, sma50: 99 }).reasons.length, 1);   // nur SMA 50
+  assert.equal(sellCheck(t, { price: 92, sma50: 99 }).reasons.length, 2);
+  assert.equal(sellCheck(t, { price: 93, sma50: 90 }).sell, false);          // genau auf dem Stop zählt nicht
+});
+
+test('Stop nachziehen bei +10 / +15 / +20 %', () => {
+  const t = T({ ticker: 'A', entry: 100, stop: 93, shares: 1 });
+  assert.equal(trailSuggestion(t, { price: 105, sma50: 100 }), null);
+  assert.equal(trailSuggestion(t, { price: 111, sma50: 100 }).stop, 100);           // +10 %: Einstieg
+  close(trailSuggestion(t, { price: 116, sma50: 108 }).stop, 108 * 0.99);          // +15 %: unter SMA 50
+  assert.equal(trailSuggestion(t, { price: 116, sma50: 95 }).stop, 100);           // SMA 50 zu tief -> Einstieg
+  close(trailSuggestion(t, { price: 121, sma50: 108 }).stop, 110);                 // +20 %: mind. +10 %
+  assert.equal(trailSuggestion({ ...t, stop: 100 }, { price: 111, sma50: 100 }), null); // Stop schon so hoch
+  assert.equal(trailSuggestion(t, { price: 121, sma50: 108 }).level, 20);
+});

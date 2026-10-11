@@ -1,8 +1,10 @@
-import { html, raw, icon, infoBtn, store, save, esc } from './ui.js';
+import { html, raw, icon, infoBtn, refresh } from './ui.js';
 import { stockCard, emptyState, skeleton, signalBadge, changeText, dots, tone } from './components.js';
 import { drawChart, palette } from './chart.js';
 import { num, usd, percent, dateDe, dateTimeDe, compact } from '../core/format.js';
 import { positionSize } from '../core/position.js';
+import { getRisk, setRisk, watch } from './db.js';
+import { computeAlerts } from './pages-trade.js';
 
 const isWeak = (d) => d.market?.status === 'red';
 
@@ -44,7 +46,9 @@ export function heute(d) {
   if (d.meta.status === 'fehler' || !d.stocks.length && !m) {
     return html`<h1 class="page-title">Heute</h1>${emptyState({ title: 'Keine aktuellen Daten', text: 'Der letzte Abruf ist fehlgeschlagen. Details stehen oben im roten Hinweis. Alte Zahlen zeige ich bewusst nicht.', art: icon.warn })}`;
   }
-  return html`<h1 class="page-title">Heute</h1>${market}${stats}
+  const alerts = computeAlerts(d);
+  const sellBanner = alerts.sell.length ? html`<a class="banner red" href="#/portfolio" role="alert">${icon.warn}<div><b>Verkaufen prüfen:</b> ${alerts.sell.map((x) => x.t.ticker).join(', ')}. Tippe für die Begründung.</div></a>` : '';
+  return html`<h1 class="page-title">Heute</h1>${sellBanner}${market}${stats}
     ${section('Kaufsignale', sig, weak ? 'grau: Markt schwach' : 'alle 7 Kriterien grün')}
     ${none}
     ${section('Fast', fast, 'mindestens 5 von 7')}
@@ -136,7 +140,7 @@ export async function detail(d, ticker) {
 
   const sg = s.signal;
   const weak = isWeak(d);
-  const risk = store('risk', null) ?? { capital: d.settings.risk.capital, riskPct: d.settings.risk.riskPerTradePct };
+  const risk = getRisk(d);
   const chase = sg.gapAboveZone || (sg.distancePct != null && sg.distancePct > d.settings.signal.maxExtendedPct);
   const hasLevel = sg.level != null;
 
@@ -145,7 +149,8 @@ export async function detail(d, ticker) {
     <div class="detail-head fade-in">
       <div style="min-width:0"><div class="ticker">${s.ticker}</div><div class="name">${s.company}</div>
         <div class="chips"><span class="chip">${s.industry}</span><span class="chip">${s.sector}</span></div></div>
-      <div class="price-col"><div class="price">${num(s.price)} $</div>${changeText(s.changePct)}</div>
+      <div class="price-col"><div class="price">${num(s.price)} $</div>${changeText(s.changePct)}
+        <button class="chip ${watch.has(s.ticker) ? 'amber' : ''}" id="star" type="button" style="border:0;margin-top:6px" aria-pressed="${watch.has(s.ticker)}">${icon.star} ${watch.has(s.ticker) ? 'Gemerkt' : 'Merken'}</button></div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin:14px 0;flex-wrap:wrap">
       ${signalBadge(s, { marketWeak: weak, large: true })} ${dots(sg.criteria)}
@@ -195,9 +200,10 @@ export async function detail(d, ticker) {
         </dl>
         <div class="input-row" style="margin-top:16px">
           <div><label for="cap">Kapital ($)</label><input id="cap" type="number" inputmode="decimal" min="0" value="${risk.capital}"></div>
-          <div><label for="rk">Risiko pro Trade (%)</label><input id="rk" type="number" inputmode="decimal" step="0.1" min="0.1" value="${risk.riskPct}"></div>
+          <div><label for="rk">Risiko pro Trade (%)</label><input id="rk" type="number" inputmode="decimal" step="0.1" min="0.1" value="${risk.riskPerTradePct}"></div>
         </div>
-        <dl class="kv" id="sizing"></dl>` : html`<p class="muted" style="margin:0">Ohne Ausbruchslevel kein Vorschlag.</p>`}
+        <dl class="kv" id="sizing"></dl>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><a class="chip green" href="#/kauf/${s.ticker}" style="padding:10px 16px;font-size:14px;font-weight:700">Kauf eintragen</a><a class="chip" href="#/rechner/${s.ticker}" style="padding:10px 16px;font-size:14px">Im Rechner öffnen</a></div>` : html`<p class="muted" style="margin:0">Ohne Ausbruchslevel kein Vorschlag.</p>`}
       </section>
     </div>
     <div class="source">Kennzahlen: ${d.meta.sources.screener} · Kurse: ${d.meta.sources.prices} · Handelstag ${dateDe(s.priceDate)}<br>Berechnet ${dateTimeDe(d.meta.generatedAt)}</div>`;
@@ -211,12 +217,13 @@ export async function detail(d, ticker) {
         handle.setRange(Number(b.dataset.range));
       }));
     }
+    root.querySelector('#star')?.addEventListener('click', () => { watch.has(s.ticker) ? watch.remove(s.ticker) : watch.add(s.ticker, s); refresh(); });
     const sizing = root.querySelector('#sizing');
     if (sizing) {
       const calc = () => {
         const capital = parseFloat(root.querySelector('#cap').value);
         const riskPct = parseFloat(root.querySelector('#rk').value);
-        save('risk', { capital, riskPct });
+        setRisk({ capital, riskPerTradePct: riskPct });
         const p = positionSize({ capital, riskPct, entry: sg.entry, stop: sg.stop, maxStopPct: d.settings.signal.maxStopPct });
         sizing.innerHTML = (p.valid ? html`
           <dt>Stückzahl ${infoBtn('stueck')}</dt><dd>${num(p.shares, 0)}<small>zum Einstieg ${usd(sg.entry)}</small></dd>
@@ -233,9 +240,6 @@ export async function detail(d, ticker) {
 
 /* ---------- Platzhalter für spätere Stufen ---------- */
 const SOON = {
-  watchlist: ['Watchlist', 2, icon.star, 'Hier merkst du dir Aktien – auch wenn sie den Screener verlassen – und siehst, wenn sich ihr Signal ändert.'],
-  portfolio: ['Portfolio', 2, icon.briefcase, 'Hier trägst du deine Käufe ein und siehst Gewinn/Verlust, Abstand zum Stop und dein Gesamtrisiko.'],
-  rechner: ['Rechner', 2, icon.calc, 'Kapital und Risiko eingeben, Stückzahl und maximalen Verlust sehen. (Auf der Detailseite jeder Aktie gibt es das schon.)'],
   branchen: ['Branchen', 3, icon.grid, 'Farbkacheln: welche Branchen gerade die meisten Treffer und die beste Performance haben.'],
   auswertung: ['Auswertung', 3, icon.chart, 'Trefferquote, Gewinn und Verlust, Chance-Risiko-Verhältnis und Verlaufskurve deiner Trades.'],
   kalender: ['Kalender', 3, icon.calendar, 'Quartalsberichte deiner Positionen und Watchlist, mit Warnung 2 Wochen vorher.'],

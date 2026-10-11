@@ -42,7 +42,8 @@ export const DEFAULTS = {
     riskPerTradePct: 1,
     maxOpenRiskPct: 6,
     maxPositions: 6,
-    maxPerIndustry: 2
+    maxPerIndustry: 2,
+    fee: 0                    // Broker-Gebühr pro Order in $ (Stufe 3: Einstellungen)
   },
 
   // Datenqualität
@@ -52,6 +53,9 @@ export const DEFAULTS = {
     maxGapDays: 4,             // mehr als 4 Kalendertage ohne Kurs = fehlende Tage
     maxPriceDeviationPct: 3    // Finviz-Kurs vs. Schlusskurs der Kurs-API
   },
+
+  // Aktien, die immer mitgeladen werden (Positionen und Watchlist), auch außerhalb des Screeners
+  trackTickers: [],
 
   market: { benchmark: 'SPY', smaDays: 200 }
 };

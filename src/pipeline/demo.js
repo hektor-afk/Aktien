@@ -163,11 +163,13 @@ export function demoUniverse({ endDate }) {
     });
   });
   // Zwei Aktien, die der Screener aussortieren muss (zeigt, dass der Filter wirkt)
+  bars.SLOW = genBars({ seed: 901, endDate, scenario: 'down', startPrice: 50, avgVol: 1_400_000 });
+  bars.CHEP = genBars({ seed: 902, endDate, scenario: 'below', startPrice: 5, avgVol: 300_000 });
   rows.push({ ticker: 'CHEP', company: 'Chepstow Minerals', sector: 'Basic Materials', industry: 'Gold', marketCap: 8e8,
-    price: 6.2, changePct: 1.1, volume: 400000, avgVolume: 300000, epsQoq: 40, salesQoq: 30, perf6m: 55,
+    price: bars.CHEP.at(-1).c, changePct: 1.1, volume: 400000, avgVolume: 300000, epsQoq: 40, salesQoq: 30, perf6m: 55,
     distSma50: 4, distSma200: 12, distHigh52: -3, earnings: null });
   rows.push({ ticker: 'SLOW', company: 'Slowbridge Foods', sector: 'Consumer Defensive', industry: 'Packaged Foods', marketCap: 9e9,
-    price: 54, changePct: -0.2, volume: 1.2e6, avgVolume: 1.4e6, epsQoq: 3, salesQoq: 2, perf6m: 4,
+    price: bars.SLOW.at(-1).c, changePct: -0.2, volume: 1.2e6, avgVolume: 1.4e6, epsQoq: 3, salesQoq: 2, perf6m: 4,
     distSma50: 1, distSma200: 3, distHigh52: -6, earnings: null });
   return { rows, bars };
 }

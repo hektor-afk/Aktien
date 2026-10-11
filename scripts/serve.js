@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { networkInterfaces } from 'node:os';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'web');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
@@ -16,4 +17,9 @@ createServer(async (req, res) => {
     const body = await readFile(file);
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' }).end(body);
   } catch { res.writeHead(404).end('Nicht gefunden'); }
-}).listen(port, '0.0.0.0', () => console.log(`App läuft auf http://localhost:${port}`));
+}).listen(port, '0.0.0.0', () => {
+  console.log(`\nApp läuft. Am Computer öffnen:  http://localhost:${port}`);
+  const lan = Object.values(networkInterfaces()).flat().filter((i) => i.family === 'IPv4' && !i.internal);
+  for (const i of lan) console.log(`Am Handy (gleiches WLAN):        http://${i.address}:${port}`);
+  console.log('Beenden mit Strg+C.\n');
+});

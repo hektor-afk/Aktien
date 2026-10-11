@@ -1,7 +1,8 @@
-import { html, raw, icon, esc } from './ui.js';
+import { html, raw, icon, openSheet, refresh } from './ui.js';
 import { GLOSSARY } from './glossary.js';
 import { skeleton } from './components.js';
 import { heute, treffer, bindTreffer, detail, soon, SOON_KEYS } from './pages.js';
+import { rechner, watchlist, portfolio, kauf, einstellungen, computeAlerts } from './pages-trade.js';
 import { dateTimeDe } from '../core/format.js';
 import { expectedTradingDate, weekdaysBetween } from '../core/dates.js';
 
@@ -15,20 +16,14 @@ const NAV = [['heute', 'Heute', icon.home], ['treffer', 'Treffer', icon.list], [
 const MORE = [['branchen', 'Branchen', icon.grid], ['auswertung', 'Auswertung', icon.chart], ['kalender', 'Kalender', icon.calendar], ['einstellungen', 'Einstellungen', icon.gear]];
 
 function drawNav(active) {
-  const link = ([k, t, i]) => html`<a href="#/${k}" ${active === k ? raw('aria-current="page"') : ''}>${i}<span>${t}</span></a>`;
+  const al = data ? computeAlerts(data) : { sell: [], changed: [] };
+  const badge = { portfolio: al.sell.length, watchlist: al.changed.length };
+  const link = ([k, t, i]) => html`<a href="#/${k}" ${active === k ? raw('aria-current="page"') : ''}>${i}<span>${t}</span>${badge[k] ? html`<i class="navdot ${k === 'portfolio' ? 'red' : ''}" aria-label="${badge[k]} Hinweis(e)"></i>` : ''}</a>`;
   $('#nav').innerHTML = html`${NAV.map(link)}<div class="more">Mehr</div>${MORE.map((m) => html`<a class="more-link" href="#/${m[0]}" ${active === m[0] ? raw('aria-current="page"') : ''}>${m[2]}<span>${m[1]}</span></a>`)}`.s;
   // Am Handy erscheinen die "mehr"-Links nicht in der Leiste, sondern im Menü
   document.querySelectorAll('.more-link').forEach((a) => { a.style.display = matchMedia('(min-width:900px)').matches ? '' : 'none'; });
 }
 matchMedia('(min-width:900px)').addEventListener('change', () => drawNav(currentKey()));
-
-function openSheet(content) {
-  const sheet = $('#sheet');
-  sheet.innerHTML = html`<div class="sheet-body">${content}<button class="close" type="button">Schließen</button></div>`.s;
-  sheet.querySelector('.close').onclick = () => sheet.close();
-  sheet.onclick = (e) => { if (e.target === sheet) sheet.close(); };
-  if (!sheet.open) sheet.showModal();
-}
 
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-info]');
@@ -41,7 +36,7 @@ document.addEventListener('click', (e) => {
 
 $('#menuBtn').innerHTML = icon.menu.s;
 $('#menuBtn').addEventListener('click', () => {
-  openSheet(html`<h3>Menü</h3><div class="menu-list">${MORE.map(([k, t]) => html`<a href="#/${k}" data-close>${t}<small>${k === 'einstellungen' || k === 'branchen' || k === 'auswertung' || k === 'kalender' ? 'Stufe 3' : ''}</small></a>`)}
+  openSheet(html`<h3>Menü</h3><div class="menu-list">${MORE.map(([k, t]) => html`<a href="#/${k}" data-close>${t}<small>${k === 'einstellungen' ? '' : 'Stufe 3'}</small></a>`)}
     <a href="#/hinweise" data-close>Hinweise &amp; Risiko<small></small></a></div>`);
   $('#sheet').querySelectorAll('[data-close]').forEach((a) => a.addEventListener('click', () => $('#sheet').close()));
 });
@@ -80,6 +75,11 @@ async function route() {
   else if (page === 'treffer') out = { view: treffer(data), after: (r) => bindTreffer(r, data) };
   else if (page === 'aktie') { view.innerHTML = skeleton().s; out = await detail(data, decodeURIComponent(arg || '')); }
   else if (page === 'hinweise') out = { view: html`<h1 class="page-title">Hinweise &amp; Risiko</h1><div class="card stack"><p style="margin:0"><b>Keine Anlageberatung.</b> Diese App rechnet Regeln durch und ersetzt keine eigene Entscheidung.</p><p style="margin:0">Vergangene Ergebnisse garantieren nichts. Aktien können Verluste bringen, auch mit Stop-Loss (z. B. bei Kurslücken über Nacht).</p><p style="margin:0">Daten stammen von Drittanbietern und können Fehler enthalten. Prüfe wichtige Zahlen vor dem Kauf bei deinem Broker.</p></div>` };
+  else if (page === 'rechner') out = rechner(data, arg);
+  else if (page === 'watchlist') out = watchlist(data);
+  else if (page === 'portfolio') out = portfolio(data);
+  else if (page === 'kauf') out = kauf(data, arg);
+  else if (page === 'einstellungen') out = einstellungen(data);
   else if (SOON_KEYS.includes(page)) out = { view: soon(page) };
   else out = { view: heute(data) };
   if (token !== renderToken) return;
@@ -102,6 +102,7 @@ async function init() {
   await route();
 }
 addEventListener('hashchange', route);
+document.addEventListener('refresh', () => route());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => data && route());
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 init();

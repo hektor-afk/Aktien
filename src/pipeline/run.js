@@ -61,26 +61,36 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
   rmSync(join(outDir, 'bars'), { recursive: true, force: true });
   mkdirSync(join(outDir, 'bars'), { recursive: true });
 
+  const analyse = async (row, inScreener) => {
+    const bars = await barsOf(row.ticker);
+    if (!bars?.length) throw new Error('keine Kursdaten');
+    const quality = checkDataQuality(bars, { settings, expectedDate: expected, referencePrice: row.price });
+    const signal = evaluateSignal(bars, { settings, today: asOf, earningsDate: row.earnings?.date ?? null });
+    const rs = relativeStrength(bars, benchBars, { days3: settings.signal.rsDays3m, days6: settings.signal.rsDays6m });
+    const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+    writeFileSync(join(outDir, 'bars', `${row.ticker}.json`), JSON.stringify(compactBars(bars.slice(-300))));
+    return {
+      ticker: row.ticker, company: row.company || row.ticker, sector: row.sector || '', industry: row.industry || '',
+      inScreener, price: last.c, changePct: prev ? (last.c / prev.c - 1) * 100 : null, priceDate: last.t,
+      marketCap: row.marketCap ?? null, avgVolume: row.avgVolume ?? null,
+      perf6m: row.perf6m ?? (bars.length > 126 ? (last.c / bars[bars.length - 127].c - 1) * 100 : null),
+      epsQoq: row.epsQoq ?? null, salesQoq: row.salesQoq ?? null, earnings: row.earnings ?? null,
+      signal, rs, quality, spark: bars.slice(-60).map((b) => b.c)
+    };
+  };
+
   for (const row of candidates) {
-    try {
-      const bars = await barsOf(row.ticker);
-      const quality = checkDataQuality(bars, { settings, expectedDate: expected, referencePrice: row.price });
-      if (!bars?.length) throw new Error('keine Kursdaten');
-      const signal = evaluateSignal(bars, { settings, today: asOf, earningsDate: row.earnings?.date ?? null });
-      const rs = relativeStrength(bars, benchBars, { days3: settings.signal.rsDays3m, days6: settings.signal.rsDays6m });
-      const last = bars[bars.length - 1], prev = bars[bars.length - 2];
-      stocks.push({
-        ticker: row.ticker, company: row.company, sector: row.sector, industry: row.industry,
-        price: last.c, changePct: prev ? (last.c / prev.c - 1) * 100 : null, priceDate: last.t,
-        marketCap: row.marketCap, avgVolume: row.avgVolume, perf6m: row.perf6m,
-        epsQoq: row.epsQoq, salesQoq: row.salesQoq, earnings: row.earnings,
-        signal, rs, quality, spark: bars.slice(-60).map((b) => b.c)
-      });
-      writeFileSync(join(outDir, 'bars', `${row.ticker}.json`), JSON.stringify(compactBars(bars.slice(-300))));
-    } catch (e) {
-      failed.push(row.ticker);
-      log(`Fehler bei ${row.ticker}: ${e.message}`);
-    }
+    try { stocks.push(await analyse(row, true)); }
+    catch (e) { failed.push(row.ticker); log(`Fehler bei ${row.ticker}: ${e.message}`); }
+  }
+
+  // Positionen und Watchlist: immer mitladen, auch wenn der Screener sie aussortiert hat
+  const tracked = [];
+  const wanted = [...new Set((settings.trackTickers || []).map((t) => String(t).trim().toUpperCase()).filter(Boolean))]
+    .filter((t) => !stocks.some((s) => s.ticker === t));
+  for (const t of wanted) {
+    try { tracked.push(await analyse(rows.find((r) => r.ticker === t) ?? { ticker: t }, false)); }
+    catch (e) { failed.push(t); log(`Fehler bei ${t}: ${e.message}`); }
   }
   stocks.sort(compareStocks);
   writeFileSync(join(outDir, 'bars', '_BENCH.json'), JSON.stringify(compactBars(benchBars.slice(-300))));
@@ -97,7 +107,7 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
     },
     market,
     settings: { screener: settings.screener, signal: settings.signal, risk: settings.risk },
-    stocks
+    stocks, tracked
   };
 }
 
@@ -106,6 +116,7 @@ async function main() {
   mkdirSync(outDir, { recursive: true });
   const demo = args.has('--demo');
   const settings = loadSettings();
+  if (demo && !settings.trackTickers.length) settings.trackTickers = ['SLOW', 'CHEP'];
   let snapshot;
   try {
     snapshot = await build({ demo, weakMarket: args.has('--weak-market'), settings, outDir });

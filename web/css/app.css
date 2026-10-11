@@ -187,3 +187,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 #view:focus { outline: none; }
 .crit h4 > span:first-child { text-align: left; display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 55%; flex-wrap: wrap; }
 .crit h4 > span:last-child { min-width: 0; }
+.nav a { position: relative; }
+.navdot { position: absolute; top: 6px; left: calc(50% + 8px); width: 9px; height: 9px; border-radius: 50%; background: var(--amber); border: 2px solid var(--surface); }
+.navdot.red { background: var(--red); }
+@media (min-width: 900px) { .navdot { top: 50%; left: auto; right: 14px; transform: translateY(-50%); } }
+a.banner { color: var(--red); }
+a.chip, button.chip { text-decoration: none; }
+code { font-size: 12.5px; background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
+.crit .dot { flex: none; }
+label { display: block; }
+textarea { width: 100%; }

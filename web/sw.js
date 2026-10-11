@@ -1,6 +1,6 @@
 // Offline-Hülle: App-Dateien aus dem Cache, Daten immer frisch (nur bei fehlendem Netz aus dem Cache).
-const VERSION = 'v1';
-const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/pages.js', 'js/components.js', 'js/ui.js', 'js/chart.js', 'js/glossary.js',
+const VERSION = 'v2';
+const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/pages.js', 'js/components.js', 'js/ui.js', 'js/chart.js', 'js/glossary.js', 'js/db.js', 'js/pages-trade.js', 'core/portfolio.js',
   'core/indicators.js', 'core/signal.js', 'core/format.js', 'core/dates.js', 'core/position.js', 'core/relstrength.js', 'core/quality.js', 'core/market.js', 'core/rank.js',
   'vendor/lightweight-charts.js', 'manifest.webmanifest', 'icons/icon.svg'];
 

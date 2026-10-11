@@ -14,5 +14,7 @@ export const GLOSSARY = {
   luecke: ['Kurslücke (Gap)', 'Eine Aktie eröffnet deutlich höher als sie am Vortag geschlossen hat. Liegt die Eröffnung schon über dem Einstiegsbereich, ist die Gelegenheit meist vorbei: nicht hinterherlaufen.'],
   einstieg: ['Einstiegsbereich', 'Vom Ausbruchslevel bis höchstens 5 % darüber. Außerhalb dieses Bereichs wird das Risiko im Verhältnis zur Chance zu groß.'],
   stueck: ['Stückzahl', 'Wird so berechnet: (Kapital × Risiko in %) ÷ (Einstieg − Stop). So verlierst du bei Auslösen des Stops höchstens den eingestellten Anteil deines Kapitals.'],
+  chance: ['Chance-Risiko-Verhältnis', 'Ø Gewinn geteilt durch Ø Verlust deiner Trades. Bei 3 : 1 bringt ein Gewinner im Schnitt so viel wie drei Verlierer kosten. Je höher, desto weniger Treffer brauchst du, um im Plus zu sein.'],
+  rmult: ['R-Vielfaches', 'Gewinn oder Verlust gemessen in Vielfachen deines Anfangsrisikos. +2 R heißt: doppelt so viel gewonnen, wie du ursprünglich bei Stop-Auslösung verloren hättest. −1 R = Stop wurde erreicht.'],
   daten: ['Datenwarnung', 'Die App hat in den Kursdaten etwas Auffälliges gefunden, z. B. fehlende Tage, einen möglichen Aktiensplit oder einen ungewöhnlichen Sprung. Die Berechnung kann dann falsch sein – prüfe den Chart selbst.']
 };

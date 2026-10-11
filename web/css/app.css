@@ -197,3 +197,41 @@ code { font-size: 12.5px; background: var(--surface-2); padding: 1px 6px; border
 .crit .dot { flex: none; }
 label { display: block; }
 textarea { width: 100%; }
+
+/* Euro, PIN-Sperre, Kacheln, Kurve */
+.eur { display: inline; margin-left: 6px; font-weight: 500; color: var(--muted); font-size: .78em; }
+dd .eur, .chg .eur { display: block; margin: 0; }
+body.locked { overflow: hidden; }
+#lock { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: grid; place-items: center; padding: 20px; }
+.lock-box { width: 100%; max-width: 320px; text-align: center; }
+.lock-box h2 { font-size: 22px; } .lock-box p { margin: 6px 0 18px; } .lock-box p.bad { color: var(--red); }
+.pin-dots { display: flex; justify-content: center; gap: 14px; margin-bottom: 26px; }
+.pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--muted); transition: background .12s, transform .12s; }
+.pin-dots i.on { background: var(--text); border-color: var(--text); transform: scale(1.1); }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.keypad button { height: 62px; border-radius: 50%; border: 0; background: var(--surface); box-shadow: var(--shadow); font-size: 24px; font-weight: 500; }
+.keypad button:active { background: var(--surface-2); }
+.shake { animation: shake .4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 600px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+.tile { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; min-height: 126px; padding: 14px; border-radius: var(--radius); border: 1px solid var(--line); text-align: left; background: color-mix(in srgb, var(--green) var(--heat, 0%), var(--surface)); }
+.tile h3 { font-size: 15px; line-height: 1.25; }
+.tile .sector { font-size: 12px; color: var(--muted); }
+.tile b { font-size: 24px; letter-spacing: -.02em; display: block; line-height: 1.1; }
+.tile span { font-size: 12px; color: var(--muted); }
+.tile-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; }
+.curve { width: 100%; height: auto; display: block; }
+.toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; }
+.toggle input { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.mono { width: 100%; min-height: 220px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; resize: vertical; }
+.step { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 10px; margin: 10px 0; font-size: 14px; }
+.step::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+ol.steps { counter-reset: s; padding: 0; margin: 0; list-style: none; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 11px 18px; border-radius: 14px; border: 0; background: var(--surface-2); font-weight: 600; font-size: 15px; }
+.btn.primary { background: var(--text); color: var(--bg); }
+.btn.danger { color: var(--red); background: var(--red-bg); }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.cal-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.cal-row:first-child { border-top: 0; }
+.cal-date { font-weight: 650; text-align: right; flex: none; }

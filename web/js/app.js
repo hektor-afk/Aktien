@@ -1,8 +1,10 @@
 import { html, raw, icon, openSheet, refresh } from './ui.js';
 import { GLOSSARY } from './glossary.js';
 import { skeleton } from './components.js';
-import { heute, treffer, bindTreffer, detail, soon, SOON_KEYS } from './pages.js';
-import { rechner, watchlist, portfolio, kauf, einstellungen, computeAlerts } from './pages-trade.js';
+import { heute, treffer, bindTreffer, detail } from './pages.js';
+import { initLock } from './lock.js';
+import { branchen, auswertung, kalender, einstellungen } from './pages-more.js';
+import { rechner, watchlist, portfolio, kauf, computeAlerts } from './pages-trade.js';
 import { dateTimeDe } from '../core/format.js';
 import { expectedTradingDate, weekdaysBetween } from '../core/dates.js';
 
@@ -36,7 +38,7 @@ document.addEventListener('click', (e) => {
 
 $('#menuBtn').innerHTML = icon.menu.s;
 $('#menuBtn').addEventListener('click', () => {
-  openSheet(html`<h3>Menü</h3><div class="menu-list">${MORE.map(([k, t]) => html`<a href="#/${k}" data-close>${t}<small>${k === 'einstellungen' ? '' : 'Stufe 3'}</small></a>`)}
+  openSheet(html`<h3>Menü</h3><div class="menu-list">${MORE.map(([k, t]) => html`<a href="#/${k}" data-close>${t}<small></small></a>`)}
     <a href="#/hinweise" data-close>Hinweise &amp; Risiko<small></small></a></div>`);
   $('#sheet').querySelectorAll('[data-close]').forEach((a) => a.addEventListener('click', () => $('#sheet').close()));
 });
@@ -80,7 +82,9 @@ async function route() {
   else if (page === 'portfolio') out = portfolio(data);
   else if (page === 'kauf') out = kauf(data, arg);
   else if (page === 'einstellungen') out = einstellungen(data);
-  else if (SOON_KEYS.includes(page)) out = { view: soon(page) };
+  else if (page === 'branchen') out = branchen(data);
+  else if (page === 'auswertung') out = auswertung(data);
+  else if (page === 'kalender') out = kalender(data);
   else out = { view: heute(data) };
   if (token !== renderToken) return;
   view.innerHTML = out.view.s;
@@ -105,4 +109,5 @@ addEventListener('hashchange', route);
 document.addEventListener('refresh', () => route());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => data && route());
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+initLock();
 init();

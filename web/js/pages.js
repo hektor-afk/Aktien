@@ -4,6 +4,7 @@ import { drawChart, palette } from './chart.js';
 import { num, usd, percent, dateDe, dateTimeDe, compact } from '../core/format.js';
 import { positionSize } from '../core/position.js';
 import { getRisk, setRisk, watch } from './db.js';
+import { moneyHtml } from './fx.js';
 import { computeAlerts } from './pages-trade.js';
 
 const isWeak = (d) => d.market?.status === 'red';
@@ -57,7 +58,7 @@ export function heute(d) {
 }
 
 /* ---------- TREFFER ---------- */
-const filt = { q: '', signal: '', industry: '', sort: 'rank' };
+export const filt = { q: '', signal: '', industry: '', sort: 'rank' };
 const SORTS = {
   rank: ['Ranking', null],
   perf6m: ['6-Monats-Performance', (a, b) => b.perf6m - a.perf6m],
@@ -227,8 +228,8 @@ export async function detail(d, ticker) {
         const p = positionSize({ capital, riskPct, entry: sg.entry, stop: sg.stop, maxStopPct: d.settings.signal.maxStopPct });
         sizing.innerHTML = (p.valid ? html`
           <dt>Stückzahl ${infoBtn('stueck')}</dt><dd>${num(p.shares, 0)}<small>zum Einstieg ${usd(sg.entry)}</small></dd>
-          <dt>Positionsgröße</dt><dd>${usd(p.positionValue, 0)}<small>${percent(p.positionPct, 0)} vom Kapital${p.cappedByCapital ? ' · durch Kapital begrenzt' : ''}</small></dd>
-          <dt>Maximaler Verlust</dt><dd class="down">${usd(p.maxLoss, 0)}<small>${percent(p.maxLossPct, 2)} vom Kapital</small></dd>` : html`<dt>Stückzahl</dt><dd>–<small>${p.reason}</small></dd>`).s;
+          <dt>Positionsgröße</dt><dd>${moneyHtml(d, p.positionValue, 0)}<small>${percent(p.positionPct, 0)} vom Kapital${p.cappedByCapital ? ' · durch Kapital begrenzt' : ''}</small></dd>
+          <dt>Maximaler Verlust</dt><dd class="down">${moneyHtml(d, p.maxLoss, 0)}<small>${percent(p.maxLossPct, 2)} vom Kapital</small></dd>` : html`<dt>Stückzahl</dt><dd>–<small>${p.reason}</small></dd>`).s;
       };
       root.querySelectorAll('#cap,#rk').forEach((i) => i.addEventListener('input', calc));
       calc();
@@ -237,16 +238,3 @@ export async function detail(d, ticker) {
   };
   return { view, after };
 }
-
-/* ---------- Platzhalter für spätere Stufen ---------- */
-const SOON = {
-  branchen: ['Branchen', 3, icon.grid, 'Farbkacheln: welche Branchen gerade die meisten Treffer und die beste Performance haben.'],
-  auswertung: ['Auswertung', 3, icon.chart, 'Trefferquote, Gewinn und Verlust, Chance-Risiko-Verhältnis und Verlaufskurve deiner Trades.'],
-  kalender: ['Kalender', 3, icon.calendar, 'Quartalsberichte deiner Positionen und Watchlist, mit Warnung 2 Wochen vorher.'],
-  einstellungen: ['Einstellungen', 3, icon.gear, 'Filterwerte, Kapital, Risiko, Limits, Benachrichtigungen, Gebühren und Euro-Anzeige. Bis dahin: Datei config/settings.json.']
-};
-export function soon(key) {
-  const [title, stage, art, text] = SOON[key];
-  return html`<h1 class="page-title">${title}</h1>${emptyState({ title: `Kommt in Stufe ${stage}`, text, art })}`;
-}
-export const SOON_KEYS = Object.keys(SOON);

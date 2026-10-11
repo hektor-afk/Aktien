@@ -1,7 +1,8 @@
 // Stufe 2: Rechner, Watchlist, Portfolio, Journal, Kauf eintragen, Einstellungen.
 import { html, raw, icon, infoBtn, openSheet, closeSheet, refresh } from './ui.js';
 import { stockCard, emptyState, signalBadge, changeText, dots } from './components.js';
-import { getRisk, setRisk, RISK_DEFAULTS, trades, watch, findStock, allStocks } from './db.js';
+import { getRisk, setRisk, trades, watch, findStock } from './db.js';
+import { moneyHtml } from './fx.js';
 import { positionSize } from '../core/position.js';
 import { portfolioStatus, positionRisk, pnl, closedResult, lossStreak, checkNewTrade, sellCheck, trailSuggestion } from '../core/portfolio.js';
 import { num, usd, percent, dateDe } from '../core/format.js';
@@ -9,7 +10,8 @@ import { isoDate } from '../core/dates.js';
 
 const today = () => isoDate(new Date());
 const val = (root, sel) => parseFloat(String(root.querySelector(sel)?.value ?? '').replace(',', '.'));
-const money = (x, d = 2) => usd(x, d);
+let CUR = null; // aktuelle Daten, damit Beträge mit Euro-Anzeige formatiert werden können
+const money = (x, dec = 2) => moneyHtml(CUR, x, dec);
 const sign = (x) => (x >= 0 ? 'up' : 'down');
 
 /* ---------- Auswertung der offenen Positionen (Verkaufsregeln, Stop-Vorschlag) ---------- */
@@ -40,6 +42,7 @@ export function computeAlerts(d) {
 
 /* ---------- RECHNER ---------- */
 export function rechner(d, ticker) {
+  CUR = d;
   const risk = getRisk(d);
   const s = ticker ? findStock(d, ticker) : null;
   const entry = s?.signal.entry ?? '';
@@ -71,8 +74,8 @@ export function rechner(d, ticker) {
           <dl class="kv">
             <dt>Stop-Abstand</dt><dd class="${p.stopTooWide ? 'down' : ''}">${percent(p.stopPct, 1)}<small>${usd(p.riskPerShare)} pro Aktie</small></dd>
             <dt>Stückzahl</dt><dd style="font-size:24px">${num(p.shares, 0)}${p.cappedByCapital ? html`<small>durch Kapital begrenzt</small>` : ''}</dd>
-            <dt>Positionsgröße</dt><dd>${usd(p.positionValue, 0)}<small>${percent(p.positionPct, 0)} vom Kapital</small></dd>
-            <dt>Maximaler Verlust</dt><dd class="down">${usd(p.maxLoss, 0)}<small>${percent(p.maxLossPct, 2)} vom Kapital${risk.fee ? ` (inkl. Gebühren)` : ''}</small></dd>
+            <dt>Positionsgröße</dt><dd>${money(p.positionValue, 0)}<small>${percent(p.positionPct, 0)} vom Kapital</small></dd>
+            <dt>Maximaler Verlust</dt><dd class="down">${money(p.maxLoss, 0)}<small>${percent(p.maxLossPct, 2)} vom Kapital${risk.fee ? ` (inkl. Gebühren)` : ''}</small></dd>
           </dl>
           <div class="note ${over ? 'red' : ''}" style="margin-top:12px">Gesamtrisiko danach: ${percent(after, 1)} von ${risk.maxOpenRiskPct} % erlaubt${over ? ' – Limit überschritten, der Kauf wäre gesperrt.' : '.'}</div>`.s;
       };
@@ -129,6 +132,7 @@ const meter = (label, value, max, text, info = '') => {
 };
 
 export function portfolio(d) {
+  CUR = d;
   const risk = getRisk(d);
   const ev = evaluateOpen(d);
   const open = ev.map((x) => x.t);
@@ -215,6 +219,7 @@ function editSheet(t) {
 }
 
 function closeSheetForm(d, t) {
+  CUR = d;
   const s = findStock(d, t.ticker);
   openSheet(html`<h3>${t.ticker}: Verkauf eintragen</h3>
     <div class="input-row"><div><label for="xPrice">Verkaufskurs ($)</label><input id="xPrice" type="number" inputmode="decimal" step="0.01" value="${s?.price ?? ''}"></div><div><label for="xDate">Datum</label><input id="xDate" type="date" value="${today()}"></div></div>
@@ -298,32 +303,6 @@ export function kauf(d, ticker) {
         tab = 'offen';
         location.hash = '#/portfolio';
       });
-    }
-  };
-}
-
-/* ---------- EINSTELLUNGEN (Stufe 2: Risiko und Limits) ---------- */
-export function einstellungen(d) {
-  const r = getRisk(d);
-  const f = (id, label, v, step = '1', hint = '') => html`<div><label for="${id}">${label}</label><input id="${id}" type="number" inputmode="decimal" step="${step}" value="${v}">${hint ? html`<div class="note" style="margin-top:4px">${hint}</div>` : ''}</div>`;
-  return {
-    view: html`<h1 class="page-title">Einstellungen</h1>
-    <section class="card stack"><h3>Kapital und Risiko</h3>
-      <div class="input-row">${f('sCap', 'Kapital ($)', r.capital)}${f('sRisk', 'Risiko pro Trade (%)', r.riskPerTradePct, '0.1')}</div>
-      <div class="input-row">${f('sMaxRisk', 'Gesamtrisiko-Limit (%)', r.maxOpenRiskPct, '0.5', 'Höchstens so viel % in offenen Stops')}${f('sMaxPos', 'Max. Positionen', r.maxPositions)}</div>
-      <div class="input-row">${f('sInd', 'Max. pro Branche', r.maxPerIndustry)}${f('sFee', 'Gebühr pro Order ($)', r.fee, '0.01')}</div>
-      <button id="sReset" class="chip" type="button" style="border:0;align-self:flex-start;padding:8px 14px">Auf Standard zurücksetzen</button>
-      <div id="saved" class="note" aria-live="polite"></div>
-    </section>
-    <div class="note" style="margin-top:12px">Gespeichert wird nur in diesem Browser. Filterwerte des Screeners änderst du bis Stufe 3 in <code>config/defaults.js</code> oder <code>config/settings.json</code>. Benachrichtigungen, Euro-Anzeige und Datensicherung folgen in Stufe 3.</div>`,
-    after(root) {
-      const save = () => {
-        const patch = { capital: val(root, '#sCap'), riskPerTradePct: val(root, '#sRisk'), maxOpenRiskPct: val(root, '#sMaxRisk'), maxPositions: Math.round(val(root, '#sMaxPos')), maxPerIndustry: Math.round(val(root, '#sInd')), fee: val(root, '#sFee') || 0 };
-        if (Object.values(patch).some((x) => !Number.isFinite(x) || x < 0) || patch.capital <= 0 || patch.riskPerTradePct <= 0) { root.querySelector('#saved').textContent = 'Bitte gültige Zahlen eingeben.'; return; }
-        setRisk(patch); root.querySelector('#saved').textContent = 'Gespeichert.';
-      };
-      root.querySelectorAll('input').forEach((i) => i.addEventListener('input', save));
-      root.querySelector('#sReset').addEventListener('click', () => { setRisk({ ...RISK_DEFAULTS, ...(d.settings?.risk || {}) }); refresh(); });
     }
   };
 }

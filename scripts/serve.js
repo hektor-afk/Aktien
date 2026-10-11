@@ -4,9 +4,16 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
+import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'web');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
+// Noch keine Daten da? Dann Demo-Daten erzeugen, damit die App etwas zeigt.
+if (!existsSync(join(ROOT, 'data', 'latest.json'))) {
+  console.log('Noch keine Daten vorhanden – erzeuge Demo-Daten (echte Daten: "npm run update").');
+  spawnSync(process.execPath, [join(ROOT, '..', 'src', 'pipeline', 'run.js'), '--demo'], { stdio: 'inherit' });
+}
 const port = Number(process.env.PORT) || 8080;
 
 createServer(async (req, res) => {

@@ -1,0 +1,71 @@
+# Jeden Abend (Mo–Fr) um 22:00 UTC = 23:00 Uhr (Winter) / 00:00 Uhr (Sommer) deutscher Zeit, also nach 22:00 Uhr
+# und nach US-Börsenschluss: Daten holen, Kriterien anwenden, Benachrichtigung senden, Webseite neu veröffentlichen.
+name: Täglich aktualisieren und veröffentlichen
+
+on:
+  schedule:
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch:        # Knopf "Run workflow" für ein Update auf Abruf
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      update_ok: ${{ steps.result.outputs.ok }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      - name: Daten holen und auswerten
+        id: update
+        continue-on-error: true      # Bei einem Fehler wird trotzdem eine klare Fehlermeldung veröffentlicht
+        run: npm run update
+        env:
+          FINVIZ_TOKEN: ${{ secrets.FINVIZ_TOKEN }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+      - id: result
+        run: echo "ok=${{ steps.update.outcome == 'success' }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  report:                         # Lauf rot markieren, wenn der Datenabruf scheiterte (GitHub schickt dir dann eine Mail)
+    needs: [build, deploy]
+    if: ${{ always() && needs.build.outputs.update_ok == 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Datenabruf fehlgeschlagen. Die Webseite zeigt eine Fehlermeldung statt alter Zahlen."
+          exit 1

@@ -13,6 +13,8 @@ import { relativeStrength } from '../../web/core/relstrength.js';
 import { checkDataQuality } from '../../web/core/quality.js';
 import { marketStatus } from '../../web/core/market.js';
 import { compareStocks } from '../../web/core/rank.js';
+import { fetchUsdEur } from './fx.js';
+import { buildNotifications, sendNotifications } from './notify.js';
 import { expectedTradingDate, berlinParts, lastWeekdayOnOrBefore } from '../../web/core/dates.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -26,9 +28,26 @@ function loadSettings() {
   return existsSync(file) ? mergeSettings(DEFAULTS, JSON.parse(readFileSync(file, 'utf8'))) : DEFAULTS;
 }
 
+function loadPositions() {
+  // Datei = die Sicherung, die du in der App unter Einstellungen exportierst (config/portfolio.json)
+  const file = join(ROOT, 'config', 'portfolio.json');
+  if (!existsSync(file)) return { trades: [], watchlist: [] };
+  try { const o = JSON.parse(readFileSync(file, 'utf8')); return { trades: o.trades || [], watchlist: o.watchlist || [] }; }
+  catch { return { trades: [], watchlist: [], broken: true }; }
+}
+
+async function loadPrevious(outDir) {
+  const site = process.env.SITE_URL;
+  try {
+    if (site) { const r = await fetch(`${site.replace(/\/$/, '')}/data/latest.json`); if (r.ok) return await r.json(); }
+    const f = join(outDir, 'latest.json');
+    return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+  } catch { return null; }
+}
+
 const compactBars = (bars) => bars.map((b) => [b.t, b.o, b.h, b.l, b.c, b.v]);
 
-export async function build({ demo, weakMarket, settings, outDir, now = new Date() }) {
+export async function build({ demo, weakMarket, settings, outDir, now = new Date(), positions = { trades: [], watchlist: [] } }) {
   const messages = [];
   const today = berlinParts(now).date;
   const expected = demo ? lastWeekdayOnOrBefore(today) : expectedTradingDate(now);
@@ -86,7 +105,7 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
 
   // Positionen und Watchlist: immer mitladen, auch wenn der Screener sie aussortiert hat
   const tracked = [];
-  const wanted = [...new Set((settings.trackTickers || []).map((t) => String(t).trim().toUpperCase()).filter(Boolean))]
+  const wanted = [...new Set([...(settings.trackTickers || []), ...positions.trades.filter((t) => t.status === 'open').map((t) => t.ticker), ...positions.watchlist.map((w) => w.ticker)].map((t) => String(t).trim().toUpperCase()).filter(Boolean))]
     .filter((t) => !stocks.some((s) => s.ticker === t));
   for (const t of wanted) {
     try { tracked.push(await analyse(rows.find((r) => r.ticker === t) ?? { ticker: t }, false)); }
@@ -98,6 +117,13 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
   if (failed.length) messages.push({ level: 'warn', text: `Für ${failed.length} Aktie(n) fehlen Kursdaten: ${failed.join(', ')}.` });
   if (asOf < expected) messages.push({ level: 'warn', text: `Die neuesten Kurse sind vom ${asOf}, erwartet wäre der ${expected} (Feiertag oder Datenverzug).` });
 
+  let fx = null;
+  if (demo) fx = { usdEur: 0.92, date: asOf, source: 'Demo-Wert' };
+  else {
+    try { fx = await fetchUsdEur(); }
+    catch (e) { messages.push({ level: 'warn', text: `Euro-Kurs nicht verfügbar (${e.message}). Euro-Anzeige ist aus.` }); }
+  }
+
   return {
     meta: {
       generatedAt: now.toISOString(), asOf, demo,
@@ -105,8 +131,8 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
       sources: { screener: demo ? 'Demo-Daten' : 'Finviz Elite', prices: demo ? 'Demo-Daten' : provider.name, benchmark: `${settings.market.benchmark} (ETF auf den S&P 500)` },
       funnel: { loaded: rows.length, passed: hits.length, analysed: stocks.length }
     },
-    market,
-    settings: { screener: settings.screener, signal: settings.signal, risk: settings.risk },
+    market, fx,
+    settings: { screener: settings.screener, signal: settings.signal, risk: settings.risk, trackTickers: settings.trackTickers },
     stocks, tracked
   };
 }
@@ -117,21 +143,30 @@ async function main() {
   const demo = args.has('--demo');
   const settings = loadSettings();
   if (demo && !settings.trackTickers.length) settings.trackTickers = ['SLOW', 'CHEP'];
+  const positions = loadPositions();
+  const previous = demo ? null : await loadPrevious(outDir);
+  if (positions.broken) log('Warnung: config/portfolio.json ist nicht lesbar und wird ignoriert.');
   let snapshot;
   try {
-    snapshot = await build({ demo, weakMarket: args.has('--weak-market'), settings, outDir });
+    snapshot = await build({ demo, weakMarket: args.has('--weak-market'), settings, outDir, positions });
   } catch (e) {
     // Lieber eine klare Fehlermeldung als alte Zahlen anzeigen.
     log('FEHLER:', e.message);
     snapshot = {
       meta: { generatedAt: new Date().toISOString(), asOf: null, demo, status: 'fehler',
         messages: [{ level: 'error', text: `Datenabruf fehlgeschlagen: ${e.message}` }], sources: {}, funnel: null },
-      market: null, settings: null, stocks: []
+      market: null, fx: null, settings: null, stocks: [], tracked: []
     };
     process.exitCode = 1;
   }
   writeFileSync(join(outDir, 'latest.json'), JSON.stringify(snapshot));
   log(`Gespeichert: ${snapshot.stocks.length} Aktien, Status "${snapshot.meta.status}".`);
+
+  if (!demo) {
+    const list = buildNotifications({ snapshot, previous, positions: positions.trades, settings, siteUrl: process.env.SITE_URL });
+    const sent = await sendNotifications(list, { topic: process.env.NTFY_TOPIC, server: process.env.NTFY_SERVER || undefined, email: process.env.NOTIFY_EMAIL || undefined, log });
+    log(`Benachrichtigungen: ${sent} von ${list.length} gesendet.`);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

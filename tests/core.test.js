@@ -320,3 +320,71 @@ test('Stop nachziehen bei +10 / +15 / +20 %', () => {
   assert.equal(trailSuggestion({ ...t, stop: 100 }, { price: 111, sma50: 100 }), null); // Stop schon so hoch
   assert.equal(trailSuggestion(t, { price: 121, sma50: 108 }).level, 20);
 });
+
+import { tradeStats } from '../web/core/stats.js';
+import { groupIndustries, sortIndustries } from '../web/core/industries.js';
+import { earningsCalendar } from '../web/core/calendar.js';
+import { makeBackup, parseBackup } from '../web/core/backup.js';
+import { sha256Hex, hashPin } from '../web/core/sha256.js';
+
+test('Auswertung: Trefferquote, Ø Gewinn/Verlust, Chance-Risiko, Verlaufskurve', () => {
+  const mk = (id, exit, day) => ({ id, ticker: id, entry: 100, stop0: 95, stop: 95, shares: 10, exit, closedAt: `2026-03-0${day}`, status: 'closed' });
+  // Ergebnisse: +100, −50, +200, −50
+  const s = tradeStats([mk('c', 120, 3), mk('a', 110, 1), mk('b', 95, 2), mk('d', 95, 4)]);
+  assert.equal(s.n, 4); assert.equal(s.winRate, 50);
+  assert.equal(s.avgWin, 150); assert.equal(s.avgLoss, 50); assert.equal(s.payoff, 3);
+  assert.equal(s.total, 200); assert.equal(s.expectancy, 50);
+  assert.deepEqual(s.curve.map((p) => p.cum), [100, 50, 250, 200]);
+  close(s.avgR, (2 + -1 + 4 + -1) / 4);
+  assert.equal(s.best, 200); assert.equal(s.worst, -50);
+  const e = tradeStats([]);
+  assert.equal(e.n, 0); assert.equal(e.winRate, null); assert.equal(e.payoff, null);
+  assert.equal(tradeStats([mk('a', 110, 1)]).payoff, null); // kein Verlust -> kein Verhältnis
+});
+
+test('Branchen: Gruppieren und Sortieren', () => {
+  const st = (ticker, industry, overall, perf6m) => ({ ticker, industry, sector: 'S', signal: { overall }, perf6m });
+  const g = groupIndustries([st('A', 'Soft', 'kaufsignal', 40), st('B', 'Soft', 'fast', 20), st('C', 'Oil', 'noch_nicht', 80), st('D', 'Semi', 'fast', 10), st('E', 'Semi', 'fast', 30), st('F', 'Semi', 'noch_nicht', 20)]);
+  const soft = g.find((x) => x.industry === 'Soft');
+  assert.equal(soft.count, 2); assert.equal(soft.signals, 1); assert.equal(soft.fast, 1); assert.equal(soft.avgPerf6m, 30);
+  assert.deepEqual(sortIndustries(g, 'count').map((x) => x.industry), ['Semi', 'Soft', 'Oil']);
+  assert.deepEqual(sortIndustries(g, 'perf').map((x) => x.industry), ['Oil', 'Soft', 'Semi']);
+});
+
+test('Kalender: Warnung 14 Tage vorher, Positionen markiert, unbekannte zuletzt', () => {
+  const stocks = [
+    { ticker: 'A', company: 'A Inc', earnings: { date: '2026-10-20', time: 'AMC' } },
+    { ticker: 'B', company: 'B Inc', earnings: { date: '2026-11-20', time: null } },
+    { ticker: 'C', company: 'C Inc', earnings: { date: '2026-10-01', time: null } }, // vorbei
+    { ticker: 'D', company: 'D Inc', earnings: null }
+  ];
+  const cal = earningsCalendar({ stocks, openTrades: [{ ticker: 'B' }], watchlist: [{ ticker: 'A' }, { ticker: 'C' }, { ticker: 'D' }, { ticker: 'Z' }], today: '2026-10-11' });
+  assert.deepEqual(cal.map((x) => x.ticker), ['A', 'B', 'D', 'Z']);
+  assert.equal(cal[0].days, 9); assert.equal(cal[0].warn, true);
+  assert.equal(cal[1].warn, false); assert.equal(cal[1].held, true);
+  assert.equal(cal[2].unknown, true);
+  assert.equal(earningsCalendar({ stocks, openTrades: [{ ticker: 'A' }], watchlist: [], today: '2026-10-06' })[0].days, 14);
+  assert.equal(earningsCalendar({ stocks, openTrades: [{ ticker: 'A' }], watchlist: [], today: '2026-10-06' })[0].warn, true);
+  assert.equal(earningsCalendar({ stocks, openTrades: [{ ticker: 'A' }], watchlist: [], today: '2026-10-05' })[0].warn, false);
+});
+
+test('Sicherung: Export und Import mit Prüfung', () => {
+  const trades = [{ id: '1', ticker: 'A', entry: 10, stop: 9, shares: 5, status: 'open' }, { id: '2', ticker: 'B', entry: 10, stop: 9, shares: 5, status: 'closed', exit: 12 }];
+  const b = makeBackup({ trades, watchlist: [{ ticker: 'A' }], risk: { capital: 5000 }, prefs: { euro: true } }, new Date('2026-10-11T10:00:00Z'));
+  const back = parseBackup(JSON.stringify(b));
+  assert.deepEqual(back.trades, trades); assert.equal(back.risk.capital, 5000); assert.equal(back.prefs.euro, true);
+  assert.throws(() => parseBackup('kein json'), /kein JSON/);
+  assert.throws(() => parseBackup('{"app":"x"}'), /keine Sicherungsdatei/);
+  assert.throws(() => parseBackup(JSON.stringify({ ...b, trades: [{ ticker: 'A' }] })), /unvollständig/);
+  assert.throws(() => parseBackup(JSON.stringify({ ...b, trades: [{ ...trades[1], exit: undefined }] })), /Verkaufskurs/);
+  assert.throws(() => parseBackup(JSON.stringify({ ...b, version: 99 })), /neueren/);
+});
+
+test('SHA-256 stimmt mit Referenzwerten überein, PIN-Hash ist stabil und salzabhängig', () => {
+  assert.equal(sha256Hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  assert.equal(sha256Hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  assert.equal(sha256Hex('a'.repeat(1000)), '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3');
+  assert.equal(hashPin('1234', 'salz', 10), hashPin('1234', 'salz', 10));
+  assert.notEqual(hashPin('1234', 'salz', 10), hashPin('1235', 'salz', 10));
+  assert.notEqual(hashPin('1234', 'salz', 10), hashPin('1234', 'anders', 10));
+});

@@ -15,6 +15,7 @@ import { compareStocks } from '../../web/core/rank.js';
 import { fetchUsdEur } from './fx.js';
 import { buildNotifications, sendNotifications } from './notify.js';
 import { encryptDir, readSnapshotFile } from './encrypt.js';
+import { missingConfig, configError } from './config-check.js';
 import { decryptText } from '../../web/core/crypto.js';
 import { expectedTradingDate, berlinParts, lastWeekdayOnOrBefore } from '../../web/core/dates.js';
 
@@ -67,6 +68,8 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
     barsOf = async (t) => uni.bars[t];
     messages.push({ level: 'info', text: 'DEMO-MODUS: Alle Aktien und Kurse sind erfunden. Nur zum Ausprobieren.' });
   } else {
+    const miss = missingConfig(process.env, { ci: Boolean(process.env.CI) });
+    if (miss.length) throw new Error(configError(miss, Boolean(process.env.CI)));
     const scan = await fetchScreener({ settings });
     rows = scan.rows;
     skipCriteria = scan.unavailable;

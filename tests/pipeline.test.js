@@ -96,3 +96,13 @@ test('Ordner verschlüsseln: Klartext verschwindet, Inhalt bleibt entschlüsselb
   assert.equal(await decryptText(readFileSync(join(dir, 'bars', 'A.enc'), 'utf8'), 'pw'), '[["2026-01-02",1,2,0.5,1.5,100]]');
   await assert.rejects(encryptDir(dir, ''), /Kein Passwort/);
 });
+
+import { missingConfig, configError } from '../src/pipeline/config-check.js';
+test('Konfiguration: fehlende Secrets werden vollständig genannt', () => {
+  assert.deepEqual(missingConfig({}, { ci: true }), ['TWELVEDATA_API_KEY', 'DATA_PASSPHRASE']);
+  assert.deepEqual(missingConfig({ TWELVEDATA_API_KEY: 'x' }, { ci: true }), ['DATA_PASSPHRASE']);
+  assert.deepEqual(missingConfig({ TWELVEDATA_API_KEY: 'x' }, { ci: false }), []);   // lokal ist das Daten-Passwort optional
+  assert.deepEqual(missingConfig({ TWELVEDATA_API_KEY: '', DATA_PASSPHRASE: 'p' }, { ci: true }), ['TWELVEDATA_API_KEY']);
+  assert.match(configError(['A', 'B'], true), /A, B.*Secrets and variables/);
+  assert.match(configError(['A'], false), /\.env/);
+});

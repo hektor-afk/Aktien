@@ -16,7 +16,7 @@ Siehe **docs/EINRICHTUNG.md** (Schlüssel, GitHub Pages, Push aufs Handy).
 Dann `npm run update`, danach `npm start`.
 
 ## Einstellungen
-- Screener-/Signalwerte: `config/defaults.js` (eigene Werte in `config/settings.json`, nur ändern, was du willst)
+- Screener-/Signalwerte: `web/core/defaults.js` (eigene Werte in `config/settings.json`, nur ändern, was du willst)
 - Aktien, die immer mitgeladen werden (Positionen, Watchlist): `"trackTickers": ["ABCD"]` in `config/settings.json`
 - Kapital, Risiko, Limits: in der App unter Einstellungen
 - Kriterien-Logik: `web/core/signal.js`, Portfolio-Regeln: `web/core/portfolio.js`

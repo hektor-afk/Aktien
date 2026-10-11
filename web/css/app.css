@@ -236,3 +236,7 @@ ol.steps { counter-reset: s; padding: 0; margin: 0; list-style: none; }
 .cal-row:first-child { border-top: 0; }
 .cal-date { font-weight: 650; text-align: right; flex: none; }
 #gate { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: grid; place-items: center; padding: 20px; }
+.spin svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.topbar .icon-btn { flex: none; }
+.updated { min-width: 0; }

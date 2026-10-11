@@ -3,6 +3,9 @@ import { GLOSSARY } from './glossary.js';
 import { skeleton } from './components.js';
 import { heute, treffer, bindTreffer, detail } from './pages.js';
 import { initLock } from './lock.js';
+import { refresh as liveRefresh, getKey, liveMeta } from './live.js';
+import { trackedItems } from './db.js';
+import { prefs } from './fx.js';
 import { loadData, setPassword, NEED_PASSWORD } from './data.js';
 import { BAD_PASSWORD } from '../core/crypto.js';
 import { branchen, auswertung, kalender, einstellungen } from './pages-more.js';
@@ -59,10 +62,51 @@ function banners() {
     for (const x of m.messages) if (x.level !== 'info' || !m.demo) out.push([x.level === 'warn' ? 'amber' : '', x.level === 'warn' ? 'Hinweis' : 'Info', x.text]);
   }
   $('#banners').innerHTML = out.map(([c, t, x]) => html`<div class="banner ${c}" role="${c === 'red' ? 'alert' : 'status'}">${c ? icon.warn : icon.info}<div><b>${t}</b> ${x}</div></div>`.s).join('');
-  $('#updated').innerHTML = m.generatedAt ? html`Zuletzt aktualisiert:<br><b>${dateTimeDe(m.generatedAt)}</b>`.s : '';
+  $('#updated').innerHTML = m.generatedAt ? html`Zuletzt aktualisiert:<br><b>${dateTimeDe(m.generatedAt)}</b><br><span id="liveStatus"></span>`.s : '';
+  updateLiveStatus();
 }
 
 const currentKey = () => (location.hash.replace(/^#\//, '').split('/')[0] || 'heute');
+
+/* ---------- Live-Kurse: automatisch aktuell halten ---------- */
+const clockDe = (iso) => new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(iso));
+let liveProgress = null;
+
+function updateLiveStatus() {
+  const el = document.getElementById('liveStatus');
+  const btn = $('#refreshBtn');
+  btn?.classList.toggle('spin', Boolean(liveProgress?.running));
+  if (!el) return;
+  const m = liveMeta();
+  if (liveProgress?.running) el.textContent = `Live-Update ${liveProgress.done}/${liveProgress.total} …`;
+  else if (!m.hasKey) el.textContent = '';
+  else if (m.lastError) { el.innerHTML = html`<span class="down" title="${m.lastError}">Live-Update fehlgeschlagen</span>`.s; }
+  else if (m.lastRun) el.textContent = `Live: ${clockDe(m.lastRun)} Uhr`;
+}
+
+function safeToRerender() {
+  const a = document.activeElement;
+  const typing = a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName);
+  return !typing && !$('#sheet').open && !['kauf', 'rechner', 'einstellungen'].includes(currentKey());
+}
+
+async function runLive(force = false) {
+  if (!data || !getKey()) return;
+  const items = trackedItems(data);
+  if (!items.length) return;
+  await liveRefresh(data, items, { force });
+}
+
+document.addEventListener('live-progress', (e) => {
+  liveProgress = e.detail;
+  updateLiveStatus();
+  if (!e.detail.running) { drawNav(currentKey()); if (e.detail.updated && safeToRerender()) route(); }
+});
+document.addEventListener('live-request', (e) => runLive(e.detail?.force));
+$('#refreshBtn').innerHTML = icon.refresh.s;
+$('#refreshBtn').addEventListener('click', () => { if (getKey()) runLive(true); else location.hash = '#/einstellungen'; });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && prefs().autoLive !== false) runLive(false); });
+setInterval(() => { if (!document.hidden && prefs().autoLive !== false) runLive(false); }, 5 * 60_000);
 
 async function route() {
   const token = ++renderToken;
@@ -144,6 +188,7 @@ async function init() {
   }
   banners();
   await route();
+  if (prefs().autoLive !== false) runLive(false);
 }
 addEventListener('hashchange', route);
 document.addEventListener('refresh', () => route());

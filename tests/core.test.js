@@ -388,3 +388,38 @@ test('SHA-256 stimmt mit Referenzwerten überein, PIN-Hash ist stabil und salzab
   assert.notEqual(hashPin('1234', 'salz', 10), hashPin('1235', 'salz', 10));
   assert.notEqual(hashPin('1234', 'salz', 10), hashPin('1234', 'anders', 10));
 });
+
+import { analyseStock } from '../web/core/analyse.js';
+import { isSessionComplete, isMarketOpen, nyParts } from '../web/core/dates.js';
+
+test('Börsenzeit New York: offen, Kerze fertig oder nicht', () => {
+  // Mittwoch 2026-10-14, Sommerzeit: 18:00 UTC = 14:00 New York
+  assert.equal(nyParts(new Date('2026-10-14T18:00:00Z')).date, '2026-10-14');
+  assert.equal(isMarketOpen(new Date('2026-10-14T18:00:00Z')), true);
+  assert.equal(isMarketOpen(new Date('2026-10-14T13:00:00Z')), false);   // 9:00 vor Eröffnung
+  assert.equal(isMarketOpen(new Date('2026-10-14T20:00:00Z')), false);   // 16:00 geschlossen
+  assert.equal(isMarketOpen(new Date('2026-10-17T16:00:00Z')), false);   // Samstag
+  assert.equal(isSessionComplete('2026-10-14', new Date('2026-10-14T18:00:00Z')), false);  // Tag läuft
+  assert.equal(isSessionComplete('2026-10-14', new Date('2026-10-14T20:30:00Z')), true);   // 16:30 NY
+  assert.equal(isSessionComplete('2026-10-13', new Date('2026-10-14T14:00:00Z')), true);   // Vortag
+  assert.equal(isSessionComplete('2026-10-16', new Date('2026-10-17T10:00:00Z')), true);   // Freitag, jetzt Samstag
+  // Winterzeit: 2026-12-02 (Mittwoch), 21:30 UTC = 16:30 New York (UTC-5)
+  assert.equal(isSessionComplete('2026-12-02', new Date('2026-12-02T21:30:00Z')), true);
+  assert.equal(isSessionComplete('2026-12-02', new Date('2026-12-02T20:30:00Z')), false);
+});
+
+test('Auswertung mit laufendem Tag: Signal aus abgeschlossenen Tagen, Kurs aus der laufenden Kerze', () => {
+  const bars = trendBars();
+  const meta = { ticker: 'T', earnings: { date: '2026-10-27' } };
+  const done = analyseStock({ bars, benchBars: bars, settings: DEFAULTS, today: '2026-09-17', meta });
+  assert.equal(done.signal.label, 'Kaufsignal'); assert.equal(done.partial, false); assert.equal(done.lastClose, 229.5);
+  // Heute läuft noch: letzte Kerze ist nur ein Zwischenstand und darf das Signal nicht bestimmen
+  const live = bars.concat([{ t: '2026-09-18', o: 229.5, h: 233, l: 229, c: 232, v: 300 }]);
+  const part = analyseStock({ bars: live, benchBars: live, settings: DEFAULTS, today: '2026-09-18', meta, partial: true });
+  assert.equal(part.price, 232); close(part.changePct, (232 / 229.5 - 1) * 100);
+  assert.equal(part.lastClose, 229.5); assert.equal(part.priceDate, '2026-09-18');
+  assert.equal(part.signal.label, 'Kaufsignal');       // gleiche abgeschlossene Tage wie vorher
+  assert.equal(part.partial, true);
+  assert.throws(() => analyseStock({ bars: [], settings: DEFAULTS, meta }), /keine Kursdaten/);
+  assert.equal(analyseStock({ bars: bars.slice(0, 40), benchBars: bars, settings: DEFAULTS, today: '2026-09-17', meta }).signal.overall, 'noch_nicht');
+});

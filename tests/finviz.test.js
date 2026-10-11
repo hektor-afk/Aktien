@@ -51,3 +51,13 @@ test('Export-URL braucht einen Token', () => {
   assert.throws(() => buildExportUrl({ token: '' }), /FINVIZ_TOKEN/);
   assert.match(buildExportUrl({ token: 'abc' }), /auth=abc/);
 });
+
+import { fetchTickerRows } from '../src/pipeline/finviz.js';
+test('Gezielte Abfrage einzelner Ticker (Watchlist)', async () => {
+  const u = new URL(buildExportUrl({ token: 'abc', tickers: ['AAPL', 'MSFT'] }));
+  assert.equal(u.searchParams.get('t'), 'AAPL,MSFT'); assert.equal(u.searchParams.get('f'), null);
+  let called;
+  const rows = await fetchTickerRows({ token: 'abc', tickers: ['AAA'], today: '2026-10-01', fetchImpl: async (url) => { called = url; return { ok: true, text: async () => CSV }; } });
+  assert.match(called, /t=AAA/); assert.equal(rows.length, 5);
+  await assert.rejects(fetchTickerRows({ token: 'abc', tickers: ['A'], today: '2026-10-01', fetchImpl: async () => ({ ok: false, status: 403 }) }), /403/);
+});

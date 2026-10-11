@@ -10,9 +10,12 @@ export const FINVIZ_PREFILTER = 'geo_usa,ind_stocksonly,cap_smallover,sh_avgvol_
 // Falls Finviz die Nummern ändert, hier anpassen – gelesen wird später über die Spaltennamen.
 export const FINVIZ_COLUMNS = '1,2,3,4,6,22,23,45,53,54,57,63,65,66,67,68';
 
-export function buildExportUrl({ token, filters = FINVIZ_PREFILTER, columns = FINVIZ_COLUMNS }) {
+export function buildExportUrl({ token, filters = FINVIZ_PREFILTER, columns = FINVIZ_COLUMNS, tickers = null }) {
   if (!token) throw new Error('FINVIZ_TOKEN fehlt. Bitte in der Datei .env eintragen.');
-  const params = new URLSearchParams({ v: '152', f: filters, c: columns, auth: token });
+  // Mit `tickers` werden gezielt diese Aktien abgefragt (Watchlist/Positionen), ohne Screener-Filter.
+  const params = new URLSearchParams(tickers?.length
+    ? { v: '152', t: tickers.join(','), c: columns, auth: token }
+    : { v: '152', f: filters, c: columns, auth: token });
   return `https://elite.finviz.com/export.ashx?${params}`;
 }
 
@@ -127,5 +130,14 @@ export async function fetchScreener({ token, today, fetchImpl = fetch }) {
   if (!res.ok) throw new Error(`Finviz-Abruf fehlgeschlagen (HTTP ${res.status}). Token/Abo prüfen.`);
   const text = await res.text();
   if (/<html/i.test(text.slice(0, 200))) throw new Error('Finviz hat eine Webseite statt der CSV geliefert. Token ungültig oder Abo abgelaufen?');
+  return parseScreenerCsv(text, today);
+}
+
+/** Kennzahlen (Firma, Branche, Quartalstermin ...) für bestimmte Ticker, auch außerhalb des Screeners. */
+export async function fetchTickerRows({ token, tickers, today, fetchImpl = fetch }) {
+  const res = await fetchImpl(buildExportUrl({ token, tickers }), { headers: { 'User-Agent': 'Mozilla/5.0 aktien-app' } });
+  if (!res.ok) throw new Error(`Finviz-Abruf für ${tickers.length} Ticker fehlgeschlagen (HTTP ${res.status})`);
+  const text = await res.text();
+  if (/<html/i.test(text.slice(0, 200))) throw new Error('Finviz hat eine Webseite statt der CSV geliefert.');
   return parseScreenerCsv(text, today);
 }

@@ -29,6 +29,7 @@ export const icon = {
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   pause: svg('<path d="M9 5v14M15 5v14"/>'),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'),
+  refresh: svg('<path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/>'),
   up: svg('<path d="M7 17l10-10M9 7h8v8"/>')
 };
 
@@ -51,3 +52,4 @@ export function openSheet(content, onOpen) {
 }
 export const closeSheet = () => document.querySelector('#sheet').open && document.querySelector('#sheet').close();
 export const refresh = () => document.dispatchEvent(new CustomEvent('refresh'));
+export const requestLive = (force = true) => document.dispatchEvent(new CustomEvent('live-request', { detail: { force } }));

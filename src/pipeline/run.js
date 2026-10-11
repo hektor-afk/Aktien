@@ -5,12 +5,10 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULTS, mergeSettings } from '../../config/defaults.js';
-import { fetchScreener, applyScreener } from './finviz.js';
+import { fetchScreener, applyScreener, fetchTickerRows } from './finviz.js';
 import { twelveDataProvider } from './prices.js';
 import { demoUniverse, genMarket } from './demo.js';
-import { evaluateSignal } from '../../web/core/signal.js';
-import { relativeStrength } from '../../web/core/relstrength.js';
-import { checkDataQuality } from '../../web/core/quality.js';
+import { analyseStock } from '../../web/core/analyse.js';
 import { marketStatus } from '../../web/core/market.js';
 import { compareStocks } from '../../web/core/rank.js';
 import { fetchUsdEur } from './fx.js';
@@ -89,20 +87,17 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
 
   const analyse = async (row, inScreener) => {
     const bars = await barsOf(row.ticker);
-    if (!bars?.length) throw new Error('keine Kursdaten');
-    const quality = checkDataQuality(bars, { settings, expectedDate: expected, referencePrice: row.price });
-    const signal = evaluateSignal(bars, { settings, today: asOf, earningsDate: row.earnings?.date ?? null });
-    const rs = relativeStrength(bars, benchBars, { days3: settings.signal.rsDays3m, days6: settings.signal.rsDays6m });
-    const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+    const stock = analyseStock({
+      bars, benchBars, settings, today: asOf, expectedDate: expected,
+      meta: {
+        ticker: row.ticker, company: row.company, sector: row.sector, industry: row.industry, inScreener, earnings: row.earnings ?? null,
+        refPrice: row.price, marketCap: row.marketCap ?? null, avgVolume: row.avgVolume ?? null,
+        perf6m: row.perf6m ?? (bars.length > 126 ? (bars[bars.length - 1].c / bars[bars.length - 127].c - 1) * 100 : null),
+        epsQoq: row.epsQoq ?? null, salesQoq: row.salesQoq ?? null
+      }
+    });
     writeFileSync(join(outDir, 'bars', `${row.ticker}.json`), JSON.stringify(compactBars(bars.slice(-300))));
-    return {
-      ticker: row.ticker, company: row.company || row.ticker, sector: row.sector || '', industry: row.industry || '',
-      inScreener, price: last.c, changePct: prev ? (last.c / prev.c - 1) * 100 : null, priceDate: last.t,
-      marketCap: row.marketCap ?? null, avgVolume: row.avgVolume ?? null,
-      perf6m: row.perf6m ?? (bars.length > 126 ? (last.c / bars[bars.length - 127].c - 1) * 100 : null),
-      epsQoq: row.epsQoq ?? null, salesQoq: row.salesQoq ?? null, earnings: row.earnings ?? null,
-      signal, rs, quality, spark: bars.slice(-60).map((b) => b.c)
-    };
+    return stock;
   };
 
   for (const row of candidates) {
@@ -114,6 +109,12 @@ export async function build({ demo, weakMarket, settings, outDir, now = new Date
   const tracked = [];
   const wanted = [...new Set([...(settings.trackTickers || []), ...positions.trades.filter((t) => t.status === 'open').map((t) => t.ticker), ...positions.watchlist.map((w) => w.ticker)].map((t) => String(t).trim().toUpperCase()).filter(Boolean))]
     .filter((t) => !stocks.some((s) => s.ticker === t));
+  const known = new Set(rows.map((r) => r.ticker));
+  const missingMeta = wanted.filter((t) => !known.has(t));
+  if (!demo && missingMeta.length) {
+    try { rows.push(...await fetchTickerRows({ token: process.env.FINVIZ_TOKEN, tickers: missingMeta, today })); }
+    catch (e) { messages.push({ level: 'warn', text: `Firmendaten für ${missingMeta.join(', ')} konnten nicht geladen werden (${e.message}).` }); }
+  }
   for (const t of wanted) {
     try { tracked.push(await analyse(rows.find((r) => r.ticker === t) ?? { ticker: t }, false)); }
     catch (e) { failed.push(t); log(`Fehler bei ${t}: ${e.message}`); }

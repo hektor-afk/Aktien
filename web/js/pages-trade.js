@@ -1,6 +1,7 @@
 // Stufe 2: Rechner, Watchlist, Portfolio, Journal, Kauf eintragen, Einstellungen.
-import { html, raw, icon, infoBtn, openSheet, closeSheet, refresh } from './ui.js';
-import { stockCard, emptyState, signalBadge, changeText, dots } from './components.js';
+import { html, raw, icon, infoBtn, openSheet, closeSheet, refresh, requestLive } from './ui.js';
+import { stockCard, emptyState, signalBadge, changeText, dots, freshness } from './components.js';
+import { getKey } from './live.js';
 import { getRisk, setRisk, trades, watch, findStock } from './db.js';
 import { moneyHtml } from './fx.js';
 import { positionSize } from '../core/position.js';
@@ -19,13 +20,14 @@ export function evaluateOpen(d) {
   const risk = getRisk(d);
   return trades.open().map((t) => {
     const s = findStock(d, t.ticker);
-    const price = s?.price ?? null;
+    const price = s?.price ?? null;                 // aktueller Kurs (kann live sein) -> Gewinn/Verlust
+    const closePrice = s?.lastClose ?? s?.price ?? null; // letzter ABGESCHLOSSENER Schluss -> Verkaufsregeln
     const sma50 = s?.signal?.sma50 ?? null;
     return {
       t, s, price, sma50,
       pnl: price != null ? pnl(t, price) : null,
-      sell: price != null ? sellCheck(t, { price, sma50 }) : { sell: false, reasons: [] },
-      trail: price != null ? trailSuggestion(t, { price, sma50 }, { bufferPct: d.settings?.signal?.stopBufferPct ?? 1 }) : null,
+      sell: closePrice != null ? sellCheck(t, { price: closePrice, sma50 }) : { sell: false, reasons: [] },
+      trail: closePrice != null ? trailSuggestion(t, { price: closePrice, sma50 }, { bufferPct: d.settings?.signal?.stopBufferPct ?? 1 }) : null,
       risk: positionRisk(t), capital: risk.capital
     };
   });
@@ -93,30 +95,43 @@ export function watchlist(d) {
     const s = findStock(d, w.ticker);
     if (!s) {
       return html`<div class="card fade-in" style="--i:${i}"><div class="stock-top"><div class="stock-id"><div class="ticker">${w.ticker}</div><div class="name">Keine aktuellen Daten</div></div>
-        <button class="chip" data-unwatch="${w.ticker}" type="button">Entfernen</button></div></div>`;
+        <button class="chip" data-unwatch="${w.ticker}" type="button">Entfernen</button></div>
+        <div class="note" style="margin-top:8px">${getKey() ? 'Wird beim nächsten Live-Update geladen …' : 'Für aktuelle Kurse: Twelve-Data-Schlüssel unter Einstellungen → Live-Kurse eintragen.'}</div></div>`;
     }
     const changed = w.lastSignal && w.lastSignal !== s.signal.overall;
     return html`<div class="fade-in" style="--i:${i}">
       ${changed ? html`<div class="banner amber" style="margin:0 0 6px">${icon.info}<div><b>Signal geändert:</b> ${w.lastLabel} → ${s.signal.label}
         <button class="chip" data-ack="${w.ticker}" type="button" style="border:0;margin-left:6px">Verstanden</button></div></div>` : ''}
       ${stockCard(s, 0, { marketWeak: d.market?.status === 'red' })}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 6px 0"><span class="note">${s.inScreener === false ? 'Nicht mehr im Screener' : 'Im Screener'}</span><button class="chip" data-unwatch="${w.ticker}" type="button" style="border:0">Entfernen</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 6px 0;flex-wrap:wrap"><span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${freshness(s)}<span class="note" style="margin:0">${s.inScreener === false ? 'nicht im Screener' : 'im Screener'}</span></span>
+        <span style="display:flex;gap:6px"><button class="chip" data-earn="${w.ticker}" type="button" style="border:0">${s.earnings ? `Bericht ${dateDe(s.earnings.date)}` : 'Bericht-Termin …'}</button><button class="chip" data-unwatch="${w.ticker}" type="button" style="border:0">Entfernen</button></span></div>
     </div>`;
   });
   return {
     view: html`<h1 class="page-title">Watchlist</h1>
+    ${!getKey() ? html`<a class="banner amber" href="#/einstellungen" style="color:var(--amber)">${icon.info}<div><b>Aktuelle Kurse automatisch:</b> Trage unter Einstellungen → Live-Kurse deinen kostenlosen Twelve-Data-Schlüssel ein. Dann hält die App deine Watchlist selbst aktuell.</div></a>` : ''}
     <form class="controls" id="addForm" style="grid-template-columns:1fr auto"><input id="addTicker" class="search" style="grid-column:auto" placeholder="Ticker hinzufügen, z. B. LUMR" autocapitalize="characters" aria-label="Ticker"><button class="chip" type="submit" style="padding:0 18px;border:0;font-size:15px">Merken</button></form>
     ${items.length ? html`<div class="list">${rows}</div>` : emptyState({ title: 'Noch nichts gemerkt', text: 'Tippe auf der Detailseite einer Aktie auf den Stern, oder gib oben einen Ticker ein. Die Watchlist behält Aktien auch dann, wenn sie den Screener verlassen.', art: icon.star })}
-    ${missing.length ? html`<div class="card" style="margin-top:14px"><h3>${icon.info} Für ${missing.length} Aktie(n) fehlen Daten</h3><p class="muted" style="margin:0 0 8px;font-size:14px">Das Nacht-Skript lädt nur Screener-Treffer. Trage diese Ticker in <code>config/settings.json</code> ein, dann werden sie mitgeladen:</p>
+    ${missing.length && !getKey() ? html`<div class="card" style="margin-top:14px"><h3>${icon.info} Für ${missing.length} Aktie(n) fehlen Daten</h3><p class="muted" style="margin:0 0 8px;font-size:14px">Das Nacht-Skript lädt nur Screener-Treffer. Trage diese Ticker in <code>config/settings.json</code> ein, dann werden sie mitgeladen:</p>
       <input readonly value='"trackTickers": ${JSON.stringify([...new Set([...missing, ...(d.settings?.trackTickers || [])])])}' onclick="this.select()" aria-label="Zeile zum Kopieren"></div>` : ''}`,
     after(root) {
       root.querySelector('#addForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const t = root.querySelector('#addTicker').value.trim().toUpperCase();
         if (!/^[A-Z.\-]{1,6}$/.test(t)) return;
-        watch.add(t, findStock(d, t)); refresh();
+        watch.add(t, findStock(d, t)); refresh(); requestLive(true);
       });
       root.querySelectorAll('[data-unwatch]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); watch.remove(b.dataset.unwatch); refresh(); }));
+      root.querySelectorAll('[data-earn]').forEach((b) => b.addEventListener('click', () => {
+        const t = b.dataset.earn;
+        const cur = watch.all().find((w) => w.ticker === t)?.earnings ?? '';
+        openSheet(html`<h3>${t}: nächster Quartalsbericht</h3><p class="muted" style="font-size:14px">Trage das Datum ein, falls es fehlt (z. B. von der Webseite der Firma). Die App warnt dann 2 Wochen vorher.</p>
+          <input id="eDate" type="date" value="${cur}"><button id="eSave" class="btn primary" type="button" style="width:100%;margin-top:12px">Speichern</button>
+          <button id="eClear" class="btn" type="button" style="width:100%;margin-top:8px">Termin löschen</button>`, (sh) => {
+          sh.querySelector('#eSave').onclick = () => { watch.setEarnings(t, sh.querySelector('#eDate').value); closeSheet(); refresh(); requestLive(true); };
+          sh.querySelector('#eClear').onclick = () => { watch.setEarnings(t, null); closeSheet(); refresh(); };
+        });
+      }));
       root.querySelectorAll('[data-ack]').forEach((b) => b.addEventListener('click', () => { watch.ack(b.dataset.ack, findStock(d, b.dataset.ack)); refresh(); }));
     }
   };
@@ -164,7 +179,7 @@ export function portfolio(d) {
         <br><button class="chip green" data-trail="${t.id}" data-stop="${x.trail.stop.toFixed(2)}" type="button" style="border:0;margin-top:6px">Stop übernehmen</button></div></div>` : ''}
       <dl class="kv" style="margin-top:14px">
         <dt>Einstieg × Stück</dt><dd>${usd(t.entry)} × ${num(t.shares, 0)}</dd>
-        <dt>Aktueller Kurs</dt><dd>${price != null ? usd(price) : '–'}</dd>
+        <dt>Aktueller Kurs</dt><dd>${price != null ? usd(price) : '–'}${s ? html`<small>${freshness(s)}</small>` : ''}</dd>
         <dt>Stop</dt><dd class="${x.sell.sell ? 'down' : ''}">${usd(t.stop)}${dist != null ? html`<small>${percent(dist, 1)} unter dem Kurs</small>` : ''}</dd>
         <dt>Risiko</dt><dd>${x.risk > 0 ? money(x.risk, 0) : html`<span class="up">abgesichert</span>`}</dd>
       </dl>

@@ -12,6 +12,8 @@ import { num, percent, dateDe, dateTimeDe } from '../core/format.js';
 import { isoDate } from '../core/dates.js';
 import { filt } from './pages.js';
 import { forgetPassword, storedPassword } from './data.js';
+import { getKey, setKey, testKey, liveMeta, clearLive } from './live.js';
+import { requestLive } from './ui.js';
 
 const val = (root, sel) => parseFloat(String(root.querySelector(sel)?.value ?? '').replace(',', '.'));
 const sign = (x) => (x >= 0 ? 'up' : 'down');
@@ -146,6 +148,13 @@ export function einstellungen(d) {
         <div class="row-actions" style="margin:0"><button id="sReset" class="btn" type="button">Auf Standard zurücksetzen</button></div>
         <div id="saved" class="note" aria-live="polite"></div></section>
 
+      <section class="card stack"><h3>Live-Kurse für Watchlist und Positionen</h3>
+        <p class="muted" style="margin:0;font-size:14px">Mit deinem kostenlosen Twelve-Data-Schlüssel holt sich die App aktuelle Kurse und Charts selbst, sobald du sie öffnest, und danach regelmäßig (alle 20 Minuten während der US-Börse). Der Schlüssel bleibt nur auf diesem Gerät.</p>
+        <div><label for="tdKey">Twelve-Data-Schlüssel</label><input id="tdKey" type="password" autocomplete="off" placeholder="z. B. 1a2b3c…" value="${getKey()}"></div>
+        <label class="toggle" for="pAuto"><span>Automatisch aktualisieren</span><input id="pAuto" type="checkbox" ${p.autoLive !== false ? raw('checked') : ''}></label>
+        <div class="row-actions" style="margin:0"><button id="tdSave" class="btn primary" type="button">Speichern und testen</button><button id="tdNow" class="btn" type="button">Jetzt aktualisieren</button>${getKey() ? html`<button id="tdClear" class="btn danger" type="button">Schlüssel und Live-Daten löschen</button>` : ''}</div>
+        <div id="tdMsg" class="note" aria-live="polite">${(() => { const m = liveMeta(); return m.hasKey ? `Abrufe heute: ${m.creditsToday} von ${m.creditsCap}${m.lastRun ? ` · letztes Update ${dateTimeDe(m.lastRun)}` : ''}${m.lastError ? ` · Fehler: ${m.lastError}` : ''}` : 'Noch kein Schlüssel. Kostenlos erhältlich auf twelvedata.com (Konto anlegen → API Key).'; })()}</div></section>
+
       <section class="card"><h3>Anzeige</h3>
         <label class="toggle" for="pEuro"><span>Beträge zusätzlich in Euro zeigen<br><span class="note">${d.fx ? `1 $ = ${num(d.fx.usdEur, 4)} € · ${d.fx.source} · Stand ${dateDe(d.fx.date)}` : 'Kein Wechselkurs verfügbar – beim nächsten Update erneut versucht.'}</span></span><input id="pEuro" type="checkbox" ${p.euro ? raw('checked') : ''} ${d.fx ? '' : raw('disabled')}></label></section>
 
@@ -188,6 +197,16 @@ export function einstellungen(d) {
       };
       ['#sCap', '#sRisk', '#sMaxRisk', '#sMaxPos', '#sInd', '#sFee'].forEach((s) => root.querySelector(s).addEventListener('input', saveRisk));
       root.querySelector('#sReset').addEventListener('click', () => { setRisk({ ...RISK_DEFAULTS, ...(d.settings?.risk || {}) }); refresh(); });
+      root.querySelector('#pAuto').addEventListener('change', (e) => setPrefs({ autoLive: e.target.checked }));
+      root.querySelector('#tdSave').addEventListener('click', async () => {
+        const msg = root.querySelector('#tdMsg'); const k = root.querySelector('#tdKey').value.trim();
+        if (!k) { msg.textContent = 'Bitte Schlüssel eingeben.'; return; }
+        setKey(k); msg.textContent = 'Teste …';
+        try { await testKey(); msg.textContent = 'Schlüssel funktioniert. Lade Kurse …'; requestLive(true); }
+        catch (e) { msg.textContent = `Test fehlgeschlagen: ${e.message}`; msg.classList.add('red'); }
+      });
+      root.querySelector('#tdNow').addEventListener('click', () => { root.querySelector('#tdMsg').textContent = getKey() ? 'Aktualisiere …' : 'Erst Schlüssel eintragen.'; requestLive(true); });
+      root.querySelector('#tdClear')?.addEventListener('click', () => { setKey(''); clearLive(); refresh(); });
       root.querySelector('#pEuro').addEventListener('change', (e) => setPrefs({ euro: e.target.checked }));
 
       // PIN

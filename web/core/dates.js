@@ -77,3 +77,26 @@ export function parseEarningsDate(text, today = isoDate(new Date())) {
   }
   return null;
 }
+
+/** Zeit an der New Yorker Börse: {date, minutes seit Mitternacht, weekday 0=So..6=Sa} */
+export function nyParts(now = new Date()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short'
+  }).formatToParts(now).map((x) => [x.type, x.value]));
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday);
+  return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute), weekday: wd };
+}
+
+/** Börse offen? (Mo–Fr 9:30–16:00 New Yorker Zeit; Feiertage kennt die Funktion nicht) */
+export function isMarketOpen(now = new Date()) {
+  const n = nyParts(now);
+  return n.weekday >= 1 && n.weekday <= 5 && n.minutes >= 570 && n.minutes < 960;
+}
+
+/** Ist die Tageskerze vom Datum `barDate` schon fertig? (kleiner Puffer bis 16:15 für den Schlusskurs) */
+export function isSessionComplete(barDate, now = new Date()) {
+  const n = nyParts(now);
+  if (barDate < n.date) return true;
+  if (barDate > n.date) return false;
+  return n.weekday === 0 || n.weekday === 6 || n.minutes >= 975;
+}

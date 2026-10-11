@@ -1,5 +1,5 @@
 import { html, raw, icon, infoBtn } from './ui.js';
-import { num, usd, percent } from '../core/format.js';
+import { num, usd, percent, dateDe } from '../core/format.js';
 
 export const tone = (overall) => (overall === 'kaufsignal' ? 'green' : overall === 'fast' ? 'amber' : '');
 
@@ -57,3 +57,14 @@ export function skeleton() {
 }
 
 export { infoBtn, usd };
+
+const clock = (iso) => new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(iso));
+/** Wie aktuell ist der Kurs? Live-Kurs mit Uhrzeit oder Schlusskurs mit Datum. */
+export function freshness(s) {
+  if (s.live) {
+    return s.live.partial
+      ? html`<span class="chip amber" title="Der Handelstag läuft noch. Signale beruhen auf abgeschlossenen Tagen.">Live ${clock(s.live.at)} · Tag läuft</span>`
+      : html`<span class="chip green">Aktuell ${clock(s.live.at)}</span>`;
+  }
+  return html`<span class="chip">Schlusskurs ${dateDe(s.priceDate)}</span>`;
+}

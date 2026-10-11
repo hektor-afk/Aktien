@@ -1,9 +1,10 @@
 import { html, raw, icon, infoBtn, refresh } from './ui.js';
-import { stockCard, emptyState, skeleton, signalBadge, changeText, dots, tone } from './components.js';
+import { stockCard, emptyState, skeleton, signalBadge, changeText, dots, tone, freshness } from './components.js';
 import { drawChart, palette } from './chart.js';
 import { num, usd, percent, dateDe, dateTimeDe, compact } from '../core/format.js';
 import { positionSize } from '../core/position.js';
-import { getRisk, setRisk, watch } from './db.js';
+import { getRisk, setRisk, watch, findStock } from './db.js';
+import { liveStock, liveBars } from './live.js';
 import { moneyHtml } from './fx.js';
 import { loadData } from './data.js';
 import { computeAlerts } from './pages-trade.js';
@@ -48,9 +49,13 @@ export function heute(d) {
   if (d.meta.status === 'fehler' || !d.stocks.length && !m) {
     return html`<h1 class="page-title">Heute</h1>${emptyState({ title: 'Keine aktuellen Daten', text: 'Der letzte Abruf ist fehlgeschlagen. Details stehen oben im roten Hinweis. Alte Zahlen zeige ich bewusst nicht.', art: icon.warn })}`;
   }
+  const wl = watch.all().map((w) => findStock(d, w.ticker)).filter(Boolean);
+  const watchBlock = wl.length ? html`<div class="section-title"><h2>Deine Watchlist</h2><a href="#/watchlist" class="muted" style="font-size:13px">alle ${wl.length} ›</a></div>
+    <section class="card fade-in" style="padding:6px 16px">${wl.slice(0, 6).map((s) => html`<a class="cal-row" href="#/aktie/${s.ticker}"><div style="min-width:0"><div class="ticker" style="font-size:17px">${s.ticker}</div><div class="name">${s.company}</div></div>
+      <div style="text-align:right"><div style="font-weight:650">${num(s.price)} $ ${changeText(s.changePct)}</div><div style="margin-top:4px">${signalBadge(s, { marketWeak: weak })}</div></div></a>`)}</section>` : '';
   const alerts = computeAlerts(d);
   const sellBanner = alerts.sell.length ? html`<a class="banner red" href="#/portfolio" role="alert">${icon.warn}<div><b>Verkaufen prüfen:</b> ${alerts.sell.map((x) => x.t.ticker).join(', ')}. Tippe für die Begründung.</div></a>` : '';
-  return html`<h1 class="page-title">Heute</h1>${sellBanner}${market}${stats}
+  return html`<h1 class="page-title">Heute</h1>${sellBanner}${market}${watchBlock}${stats}
     ${section('Kaufsignale', sig, weak ? 'grau: Markt schwach' : 'alle 7 Kriterien grün')}
     ${none}
     ${section('Fast', fast, 'mindestens 5 von 7')}
@@ -128,14 +133,18 @@ function rsRow(label, r) {
 }
 
 export async function detail(d, ticker) {
-  const s = d.stocks.find((x) => x.ticker === ticker);
+  const s = findStock(d, ticker);
   if (!s) {
-    return { view: html`<a class="back" href="#/treffer">${icon.back} Treffer</a>${emptyState({ title: 'Aktie nicht gefunden', text: `${ticker} steht nicht in den aktuellen Daten.`, art: icon.search })}` };
+    return { view: html`<a class="back" href="#/treffer">${icon.back} Treffer</a>${emptyState({ title: 'Aktie nicht gefunden', text: `${ticker} steht nicht in den Daten. Tippe auf der Watchlist auf „Merken“ – mit Live-Kursen (Einstellungen) holt die App die Daten selbst.`, art: icon.search })}` };
   }
   let bars = [];
   let barsError = false;
   try {
-    bars = (await loadData(`bars/${encodeURIComponent(ticker)}`)).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }));
+    const live = liveStock(s.ticker);
+    const snap = [...d.stocks, ...(d.tracked || [])].find((x) => x.ticker === s.ticker);
+    bars = live && (!snap || live.priceDate >= snap.priceDate) && liveBars(s.ticker).length
+      ? liveBars(s.ticker)
+      : (await loadData(`bars/${encodeURIComponent(s.ticker)}`)).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }));
   } catch { barsError = true; }
 
   const sg = s.signal;
@@ -150,6 +159,7 @@ export async function detail(d, ticker) {
       <div style="min-width:0"><div class="ticker">${s.ticker}</div><div class="name">${s.company}</div>
         <div class="chips"><span class="chip">${s.industry}</span><span class="chip">${s.sector}</span></div></div>
       <div class="price-col"><div class="price">${num(s.price)} $</div>${changeText(s.changePct)}
+        <div style="margin-top:6px">${freshness(s)}</div>
         <button class="chip ${watch.has(s.ticker) ? 'amber' : ''}" id="star" type="button" style="border:0;margin-top:6px" aria-pressed="${watch.has(s.ticker)}">${icon.star} ${watch.has(s.ticker) ? 'Gemerkt' : 'Merken'}</button></div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin:14px 0;flex-wrap:wrap">

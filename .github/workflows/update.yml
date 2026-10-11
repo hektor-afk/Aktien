@@ -5,9 +5,7 @@ name: Täglich aktualisieren und veröffentlichen
 on:
   schedule:
     - cron: '0 22 * * 1-5'
-  workflow_dispatch:        # Knopf "Run workflow" für ein Update auf Abruf
-  push:
-    branches: [main, claude/stock-screening-app-de-jbr8np]   # Standard-Branch dieses Repos
+  workflow_dispatch:        # Knopf "Run workflow" für ein Update auf Abruf (auch nach Code-Änderungen nötig)
 
 permissions:
   contents: read

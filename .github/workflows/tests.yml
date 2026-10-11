@@ -2,7 +2,7 @@ name: Tests
 on:
   pull_request:
   push:
-    branches-ignore: [main, claude/stock-screening-app-de-jbr8np]
+    branches: ['**']
 jobs:
   test:
     runs-on: ubuntu-latest
